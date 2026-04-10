@@ -663,45 +663,36 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
           ? blockStyle.textIndent
           : 0;
 
-  // Calculate total word width for this line, count actual word gaps,
-  // and accumulate total natural gap widths (including space kerning adjustments).
+  // Calculate total word width for this line and count actual word gaps.
+  // Continuation words attach to the previous word with no visible gap.
   int lineWordWidthSum = 0;
   size_t actualGapCount = 0;
-  int totalNaturalGaps = 0;
 
   for (size_t wordIdx = 0; wordIdx < lineWordCount; wordIdx++) {
     lineWordWidthSum += wordWidths[lastBreakAt + wordIdx];
-    // Count gaps: each word after the first creates a gap, unless it's a continuation
     if (wordIdx > 0 && !continuesVec[lastBreakAt + wordIdx]) {
       actualGapCount++;
-      totalNaturalGaps +=
-          renderer.getSpaceAdvance(fontId, lastCodepoint(words[lastBreakAt + wordIdx - 1]),
-                                   firstCodepoint(words[lastBreakAt + wordIdx]), wordStyles[lastBreakAt + wordIdx - 1]);
-    } else if (wordIdx > 0 && continuesVec[lastBreakAt + wordIdx]) {
-      // Cross-boundary kerning for continuation words (e.g. nonbreaking spaces, attached punctuation)
-      totalNaturalGaps +=
-          renderer.getKerning(fontId, lastCodepoint(words[lastBreakAt + wordIdx - 1]),
-                              firstCodepoint(words[lastBreakAt + wordIdx]), wordStyles[lastBreakAt + wordIdx - 1]);
     }
   }
 
-  // Calculate spacing (account for indent reducing effective page width on first line)
+  // Match the Korean reference layout: justified lines use one resolved gap width
+  // instead of "natural space width + extra". This avoids exaggerated word spacing.
   const int effectivePageWidth = pageWidth - firstLineIndent;
   const bool isLastLine = breakIndex == lineBreakIndices.size() - 1;
+  const int spareSpace = effectivePageWidth - lineWordWidthSum;
 
-  // For justified text, compute per-gap extra to distribute remaining space evenly
-  const int spareSpace = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
-  const int justifyExtra = (blockStyle.alignment == CssTextAlign::Justify && !isLastLine && actualGapCount >= 1)
-                               ? spareSpace / static_cast<int>(actualGapCount)
-                               : 0;
+  int gapWidth = renderer.getSpaceWidth(fontId);
+  if (blockStyle.alignment == CssTextAlign::Justify && !isLastLine && actualGapCount >= 1) {
+    gapWidth = spareSpace / static_cast<int>(actualGapCount);
+  }
 
   // Calculate initial x position (first line starts at indent for left/justified text;
   // may be negative for hanging indents, e.g. margin-left:3em; text-indent:-1em).
   auto xpos = static_cast<int16_t>(firstLineIndent);
   if (blockStyle.alignment == CssTextAlign::Right) {
-    xpos = effectivePageWidth - lineWordWidthSum - totalNaturalGaps;
+    xpos = spareSpace - static_cast<int>(actualGapCount) * gapWidth;
   } else if (blockStyle.alignment == CssTextAlign::Center) {
-    xpos = (effectivePageWidth - lineWordWidthSum - totalNaturalGaps) / 2;
+    xpos = (spareSpace - static_cast<int>(actualGapCount) * gapWidth) / 2;
   }
 
   // Pre-calculate X positions for words
@@ -721,15 +712,7 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
                               firstCodepoint(words[lastBreakAt + wordIdx + 1]), wordStyles[lastBreakAt + wordIdx]);
       xpos += advance;
     } else {
-      int gap = 0;
-      if (wordIdx + 1 < lineWordCount) {
-        gap = renderer.getSpaceAdvance(fontId, lastCodepoint(words[lastBreakAt + wordIdx]),
-                                       firstCodepoint(words[lastBreakAt + wordIdx + 1]),
-                                       wordStyles[lastBreakAt + wordIdx]);
-      }
-      if (blockStyle.alignment == CssTextAlign::Justify && !isLastLine) {
-        gap += justifyExtra;
-      }
+      const int gap = (wordIdx + 1 < lineWordCount) ? gapWidth : 0;
       xpos += wordWidths[lastBreakAt + wordIdx] + gap;
     }
   }
