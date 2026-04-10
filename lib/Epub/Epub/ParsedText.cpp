@@ -310,10 +310,19 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   applyParagraphIndent();
 
   const int pageWidth = viewportWidth;
+  const int spaceWidth = renderer.getSpaceWidth(fontId);
+
+  // Korean reference path: character-level wrapping is a dedicated layout mode.
+  // If this falls through the generic hyphenation breaker, justified Korean lines keep oversized gaps.
+  if (characterWrap && blockStyle.alignment == CssTextAlign::Justify) {
+    layoutCharacterWrap(renderer, fontId, viewportWidth, spaceWidth, processLine, includeLastLine);
+    return;
+  }
+
   auto wordWidths = calculateWordWidths(renderer, fontId);
 
   std::vector<size_t> lineBreakIndices;
-  if (hyphenationEnabled || characterWrap) {
+  if (hyphenationEnabled) {
     // Use greedy layout that can split words mid-loop when a hyphenated prefix fits.
     lineBreakIndices = computeHyphenatedLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues);
   } else {
