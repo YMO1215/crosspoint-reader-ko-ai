@@ -117,7 +117,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
     while (!words.empty()) {
       const std::string& word = words.front();
       const EpdFontFamily::Style wordStyle = wordStyles.front();
-      const int wordWidth = renderer.getTextAdvanceX(fontId, word.c_str(), wordStyle);
+      const int wordWidth = renderer.getTextWidth(fontId, word.c_str(), wordStyle);
 
       int newTotalWidth = totalWordWidth + wordWidth;
       int newGapCount = static_cast<int>(lineWordsVec.size());
@@ -139,7 +139,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
           size_t charsFit = 0;
           for (size_t i = 0; i < chars.size(); i++) {
             std::string test = partial + chars[i];
-            int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), wordStyle);
+            int testWidth = renderer.getTextWidth(fontId, test.c_str(), wordStyle);
             if (testWidth > pageWidth) break;
             partial = test;
             charsFit = i + 1;
@@ -148,7 +148,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
             charsFit = 1;
             partial = chars[0];
           }
-          int partialWidth = renderer.getTextAdvanceX(fontId, partial.c_str(), wordStyle);
+          int partialWidth = renderer.getTextWidth(fontId, partial.c_str(), wordStyle);
           lineWordsVec.push_back(partial);
           lineWordWidths.push_back(partialWidth);
           lineWordStylesVec.push_back(wordStyle);
@@ -186,14 +186,14 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
           size_t charsFit = 0;
           for (size_t i = 0; i < chars.size(); i++) {
             std::string test = partial + chars[i];
-            int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), wordStyle);
+            int testWidth = renderer.getTextWidth(fontId, test.c_str(), wordStyle);
             if (testWidth > maxPartialWidth) break;
             partial = test;
             charsFit = i + 1;
           }
 
           if (charsFit > 0) {
-            int partialWidth = renderer.getTextAdvanceX(fontId, partial.c_str(), wordStyle);
+            int partialWidth = renderer.getTextWidth(fontId, partial.c_str(), wordStyle);
             lineWordsVec.push_back(partial);
             lineWordWidths.push_back(partialWidth);
             lineWordStylesVec.push_back(wordStyle);
@@ -233,7 +233,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
       size_t charsFit = 0;
       for (size_t i = 0; i < chars.size(); i++) {
         std::string test = partial + chars[i];
-        int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), nextStyle);
+        int testWidth = renderer.getTextWidth(fontId, test.c_str(), nextStyle);
         if (testWidth > maxPartialWidth) break;
         partial = test;
         partialWidth = testWidth;
@@ -353,7 +353,7 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
   // Calculate first line indent (only for left/justified text).
   // Positive text-indent is controlled by the paragraphIndent setting.
-  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
+  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies --
   // it is structural (positions the bullet/marker), not decorative.
   const int firstLineIndent =
       blockStyle.textIndentDefined && (blockStyle.textIndent < 0 || paragraphIndent) &&
@@ -474,8 +474,8 @@ void ParsedText::applyParagraphIndent() {
     // CSS text-indent is explicitly set (even if 0) - don't use fallback EmSpace
     // The actual indent positioning is handled in extractLine()
   } else if (blockStyle.alignment == CssTextAlign::Justify || blockStyle.alignment == CssTextAlign::Left) {
-    // No CSS text-indent defined - use EmSpace fallback for visual indent
-    words.front().insert(0, "\xe2\x80\x83");
+    // No CSS text-indent defined - use ideographic space (U+3000) for Korean font compatibility
+    words.front().insert(0, "\xe3\x80\x80");
   }
 }
 
@@ -485,7 +485,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
                                                             std::vector<bool>& continuesVec) {
   // Calculate first line indent (only for left/justified text).
   // Positive text-indent is controlled by the paragraphIndent setting.
-  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
+  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies --
   // it is structural (positions the bullet/marker), not decorative.
   const int firstLineIndent =
       blockStyle.textIndentDefined && (blockStyle.textIndent < 0 || paragraphIndent) &&
@@ -525,7 +525,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
         continue;
       }
 
-      // Word would overflow — try to split based on hyphenation points
+      // Word would overflow - try to split based on hyphenation points
       const int availableWidth = effectivePageWidth - lineWidth - spacing;
       const bool allowFallbackBreaks = isFirstWord;  // Only for first word on line
 
@@ -629,12 +629,12 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   // After splitting "Quadratkilometer" at "Quadrat-" / "kilometer":
   //   [0] "200"         continues=false
   //   [1] " "           continues=true
-  //   [2] "Quadrat-"    continues=true   (KEPT — still attached to the no-break group)
-  //   [3] "kilometer"   continues=false  (NEW — starts fresh on the next line)
+  //   [2] "Quadrat-"    continues=true   (KEPT - still attached to the no-break group)
+  //   [3] "kilometer"   continues=false  (NEW - starts fresh on the next line)
   //
   // This lets the backtracking loop keep the entire prefix group ("200 Quadrat-") on one
   // line, while "kilometer" moves to the next line.
-  // wordContinues[wordIndex] is intentionally left unchanged — the prefix keeps its original attachment.
+  // wordContinues[wordIndex] is intentionally left unchanged - the prefix keeps its original attachment.
   wordContinues.insert(wordContinues.begin() + wordIndex + 1, false);
 
   // Update cached widths to reflect the new prefix/remainder pairing.
@@ -654,7 +654,7 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
 
   // Calculate first line indent (only for left/justified text).
   // Positive text-indent is controlled by the paragraphIndent setting.
-  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
+  // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies --
   // it is structural (positions the bullet/marker), not decorative.
   const bool isFirstLine = breakIndex == 0;
   const int firstLineIndent =
