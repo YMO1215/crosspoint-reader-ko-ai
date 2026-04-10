@@ -92,7 +92,7 @@ class CrossPointSettings {
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
   // Font family options
-  enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, OPENDYSLEXIC = 2, FONT_FAMILY_COUNT };
+  enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, OPENDYSLEXIC = 2, KOPUB = 3, FONT_FAMILY_COUNT };
   // Font size options
   enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
@@ -153,6 +153,7 @@ class CrossPointSettings {
   uint8_t statusBarBattery = 1;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
+  uint8_t paragraphIndent = 0;
   uint8_t textAntiAliasing = 1;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
@@ -169,7 +170,7 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = BOOKERLY;
+  uint8_t fontFamily = KOPUB;
   uint8_t fontSize = MEDIUM;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
@@ -195,6 +196,10 @@ class CrossPointSettings {
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
   uint8_t embeddedStyle = 1;
+  // Custom EPUB reader font path on SD card. Empty = use built-in default font.
+  char customFontPath[64] = "";
+  // Korean-specific character-level line wrapping for justified text.
+  uint8_t characterWrap = 1;
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Image rendering mode in EPUB reader
@@ -204,6 +209,9 @@ class CrossPointSettings {
 
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
+
+  bool hasCustomFont() const { return customFontPath[0] != '\0'; }
+  const char* getCustomFontName() const;
 
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
@@ -229,3 +237,5 @@ class CrossPointSettings {
 
 // Helper macro to access settings
 #define SETTINGS CrossPointSettings::getInstance()
+
+

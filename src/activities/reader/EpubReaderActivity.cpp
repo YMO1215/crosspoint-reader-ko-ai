@@ -539,16 +539,18 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     section = std::unique_ptr<Section>(new Section(epub, currentSpineIndex, renderer));
 
     if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                  SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
-                                  viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
+                                  SETTINGS.extraParagraphSpacing, SETTINGS.paragraphIndent,
+                                  SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+                                  SETTINGS.hyphenationEnabled, SETTINGS.characterWrap, SETTINGS.embeddedStyle,
                                   SETTINGS.imageRendering)) {
       LOG_DBG("ERS", "Cache not found, building...");
 
       const auto popupFn = [this]() { GUI.drawPopup(renderer, tr(STR_INDEXING)); };
 
       if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                      SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
-                                      viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
+                                      SETTINGS.extraParagraphSpacing, SETTINGS.paragraphIndent,
+                                      SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+                                      SETTINGS.hyphenationEnabled, SETTINGS.characterWrap, SETTINGS.embeddedStyle,
                                       SETTINGS.imageRendering, popupFn)) {
         LOG_ERR("ERS", "Failed to persist page data to SD");
         section.reset();
@@ -661,16 +663,18 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
 
   Section nextSection(epub, nextSpineIndex, renderer);
   if (nextSection.loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                  SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
-                                  viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
+                                  SETTINGS.extraParagraphSpacing, SETTINGS.paragraphIndent,
+                                  SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+                                  SETTINGS.hyphenationEnabled, SETTINGS.characterWrap, SETTINGS.embeddedStyle,
                                   SETTINGS.imageRendering)) {
     return;
   }
 
   LOG_DBG("ERS", "Silently indexing next chapter: %d", nextSpineIndex);
   if (!nextSection.createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                     SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
-                                     viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
+                                     SETTINGS.extraParagraphSpacing, SETTINGS.paragraphIndent,
+                                     SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+                                     SETTINGS.hyphenationEnabled, SETTINGS.characterWrap, SETTINGS.embeddedStyle,
                                      SETTINGS.imageRendering)) {
     LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
   }

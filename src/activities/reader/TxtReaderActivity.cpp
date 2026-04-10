@@ -19,7 +19,7 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 2;          // Increment when cache format changes
+constexpr uint8_t CACHE_VERSION = 3;          // Increment when cache format changes
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -94,6 +94,7 @@ void TxtReaderActivity::initializeReader() {
   cachedFontId = SETTINGS.getReaderFontId();
   cachedScreenMargin = SETTINGS.screenMargin;
   cachedParagraphAlignment = SETTINGS.paragraphAlignment;
+  cachedCharacterWrap = SETTINGS.characterWrap;
 
   // Calculate viewport dimensions
   renderer.getOrientedViewableTRBL(&cachedOrientedMarginTop, &cachedOrientedMarginRight, &cachedOrientedMarginBottom,
@@ -233,17 +234,18 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
       // Find break point
       size_t breakPos = line.length();
       while (breakPos > 0 && renderer.getTextWidth(cachedFontId, line.substr(0, breakPos).c_str()) > viewportWidth) {
-        // Try to break at space
-        size_t spacePos = line.rfind(' ', breakPos - 1);
-        if (spacePos != std::string::npos && spacePos > 0) {
-          breakPos = spacePos;
-        } else {
-          // Break at character boundary for UTF-8
-          breakPos--;
-          // Make sure we don't break in the middle of a UTF-8 sequence
-          while (breakPos > 0 && (line[breakPos] & 0xC0) == 0x80) {
-            breakPos--;
+        if (!cachedCharacterWrap) {
+          size_t spacePos = line.rfind(' ', breakPos - 1);
+          if (spacePos != std::string::npos && spacePos > 0) {
+            breakPos = spacePos;
+            continue;
           }
+        }
+
+        // Break at character boundary for UTF-8
+        breakPos--;
+        while (breakPos > 0 && (line[breakPos] & 0xC0) == 0x80) {
+          breakPos--;
         }
       }
 
@@ -433,6 +435,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   // - int32_t: font ID (to invalidate cache on font change)
   // - int32_t: screen margin (to invalidate cache on margin change)
   // - uint8_t: paragraph alignment (to invalidate cache on alignment change)
+  // - uint8_t: character wrap flag (to invalidate cache on wrap mode change)
   // - uint32_t: total pages count
   // - N * uint32_t: page offsets
 
@@ -508,6 +511,14 @@ bool TxtReaderActivity::loadPageIndexCache() {
     return false;
   }
 
+  uint8_t characterWrap;
+  serialization::readPod(f, characterWrap);
+  if (characterWrap != cachedCharacterWrap) {
+    LOG_DBG("TRS", "Cache character wrap mismatch, rebuilding");
+    f.close();
+    return false;
+  }
+
   uint32_t numPages;
   serialization::readPod(f, numPages);
 
@@ -544,6 +555,7 @@ void TxtReaderActivity::savePageIndexCache() const {
   serialization::writePod(f, static_cast<int32_t>(cachedFontId));
   serialization::writePod(f, static_cast<int32_t>(cachedScreenMargin));
   serialization::writePod(f, cachedParagraphAlignment);
+  serialization::writePod(f, cachedCharacterWrap);
   serialization::writePod(f, static_cast<uint32_t>(pageOffsets.size()));
 
   // Write page offsets

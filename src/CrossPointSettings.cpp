@@ -258,6 +258,16 @@ float CrossPointSettings::getReaderLineCompression() const {
         case WIDE:
           return 1.0f;
       }
+    case KOPUB:
+      switch (lineSpacing) {
+        case TIGHT:
+          return 0.8f;
+        case NORMAL:
+        default:
+          return 0.9f;
+        case WIDE:
+          return 0.95f;
+      }
   }
 }
 
@@ -293,6 +303,14 @@ int CrossPointSettings::getRefreshFrequency() const {
   }
 }
 
+const char* CrossPointSettings::getCustomFontName() const {
+  if (!hasCustomFont()) {
+    return nullptr;
+  }
+
+  const char* lastSlash = strrchr(customFontPath, '/');
+  return lastSlash ? lastSlash + 1 : customFontPath;
+}
 int CrossPointSettings::getReaderFontId() const {
   switch (fontFamily) {
     case BOOKERLY:
@@ -332,5 +350,8 @@ int CrossPointSettings::getReaderFontId() const {
         case EXTRA_LARGE:
           return OPENDYSLEXIC_14_FONT_ID;
       }
+    case KOPUB:
+      return KOPUB_14_FONT_ID;
   }
 }
+

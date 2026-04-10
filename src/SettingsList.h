@@ -38,7 +38,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
 
       // --- Reader ---
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                        {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_OPEN_DYSLEXIC}, "fontFamily",
+                        {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_OPEN_DYSLEXIC, StrId::STR_KOPUB_BATANG}, "fontFamily",
                         StrId::STR_CAT_READER),
       SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                         {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}, "fontSize",
@@ -59,6 +59,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                         {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW},
                         "orientation", StrId::STR_CAT_READER),
       SettingInfo::Toggle(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacing, "extraParagraphSpacing",
+                          StrId::STR_CAT_READER),
+      SettingInfo::Toggle(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::paragraphIndent, "paragraphIndent",
+                          StrId::STR_CAT_READER),
+      SettingInfo::Toggle(StrId::STR_CHARACTER_WRAP, &CrossPointSettings::characterWrap, "characterWrap",
                           StrId::STR_CAT_READER),
       SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",
                           StrId::STR_CAT_READER),

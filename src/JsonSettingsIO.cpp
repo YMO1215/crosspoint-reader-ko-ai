@@ -100,7 +100,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
-    // Dynamic entries (KOReader etc.) are stored in their own files — skip.
+    // Dynamic entries (KOReader etc.) are stored in their own files; skip.
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
@@ -115,11 +115,14 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     }
   }
 
-  // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
+  // Front button remap; managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
+  doc["customFontPath"] = s.customFontPath;
+  doc["characterWrap"] = s.characterWrap;
+  doc["paragraphIndent"] = s.paragraphIndent;
 
   String json;
   serializeJson(doc, json);
@@ -145,7 +148,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
-    // Dynamic entries (KOReader etc.) are stored in their own files — skip.
+    // Dynamic entries (KOReader etc.) are stored in their own files; skip.
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
@@ -188,7 +191,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
 
-  // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
+  // Front button remap; managed by RemapFrontButtons sub-activity, not in SettingsList.
   using S = CrossPointSettings;
   s.frontButtonBack =
       clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
@@ -199,6 +202,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+
+  const char* fontPath = doc["customFontPath"] | "";
+  strncpy(s.customFontPath, fontPath, sizeof(s.customFontPath) - 1);
+  s.customFontPath[sizeof(s.customFontPath) - 1] = '\0';
+  s.characterWrap = clamp(doc["characterWrap"] | s.characterWrap, 2, s.characterWrap);
+  s.paragraphIndent = clamp(doc["paragraphIndent"] | s.paragraphIndent, 2, s.paragraphIndent);
 
   LOG_DBG("CPS", "Settings loaded from file");
 
@@ -332,3 +341,4 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
   LOG_DBG("RBS", "Recent books loaded from file (%d entries)", store.getCount());
   return true;
 }
+

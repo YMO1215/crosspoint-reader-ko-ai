@@ -8,7 +8,7 @@
 #include "esp_wifi.h"
 
 namespace {
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";
+constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader-ko/crosspoint-reader-ko/releases/latest";
 
 /* This is buffer and size holder to keep upcoming data from latestReleaseUrl */
 char* local_buf;
@@ -160,38 +160,31 @@ bool OtaUpdater::isUpdateNewer() const {
     return false;
   }
 
-  int currentMajor, currentMinor, currentPatch;
-  int latestMajor, latestMinor, latestPatch;
+  auto parseVersion = [](const std::string& version, int& major, int& minor, int& patch, int& ko) {
+    major = minor = patch = ko = 0;
 
-  const auto currentVersion = CROSSPOINT_VERSION;
+    const size_t koPos = version.find("-ko.");
+    const std::string baseVersion = (koPos != std::string::npos) ? version.substr(0, koPos) : version;
 
-  // semantic version check (only match on 3 segments)
-  sscanf(latestVersion.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-  sscanf(currentVersion, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
+    if (koPos != std::string::npos) {
+      ko = std::stoi(version.substr(koPos + 4));
+    }
 
-  /*
-   * Compare major versions.
-   * If they differ, return true if latest major version greater than current major version
-   * otherwise return false.
-   */
+    sscanf(baseVersion.c_str(), "%d.%d.%d", &major, &minor, &patch);
+  };
+
+  int currentMajor, currentMinor, currentPatch, currentKo;
+  int latestMajor, latestMinor, latestPatch, latestKo;
+
+  parseVersion(CROSSPOINT_VERSION, currentMajor, currentMinor, currentPatch, currentKo);
+  parseVersion(latestVersion, latestMajor, latestMinor, latestPatch, latestKo);
+
   if (latestMajor != currentMajor) return latestMajor > currentMajor;
-
-  /*
-   * Compare minor versions.
-   * If they differ, return true if latest minor version greater than current minor version
-   * otherwise return false.
-   */
   if (latestMinor != currentMinor) return latestMinor > currentMinor;
-
-  /*
-   * Check patch versions.
-   */
   if (latestPatch != currentPatch) return latestPatch > currentPatch;
+  if (latestKo != currentKo) return latestKo > currentKo;
 
-  // If we reach here, it means all segments are equal.
-  // One final check, if we're on an RC build (contains "-rc"), we should consider the latest version as newer even if
-  // the segments are equal, since RC builds are pre-release versions.
-  if (strstr(currentVersion, "-rc") != nullptr) {
+  if (strstr(CROSSPOINT_VERSION, "-rc") != nullptr) {
     return true;
   }
 
@@ -270,3 +263,4 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
   LOG_INF("OTA", "Update completed");
   return OK;
 }
+

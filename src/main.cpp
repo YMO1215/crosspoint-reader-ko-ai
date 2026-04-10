@@ -113,6 +113,9 @@ EpdFontFamily opendyslexic14FontFamily(&opendyslexic14RegularFont, &opendyslexic
                                        &opendyslexic14BoldItalicFont);
 #endif  // OMIT_FONTS
 
+EpdFont kopub14RegularFont(&kopub_14_regular);
+EpdFontFamily kopub14FontFamily(&kopub14RegularFont);
+
 EpdFont smallFont(&notosans_8_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
@@ -222,6 +225,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
   renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
 #endif  // OMIT_FONTS
+  renderer.insertFont(KOPUB_14_FONT_ID, kopub14FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
