@@ -32,7 +32,7 @@ class I18n {
   static const char* getCharacterSet(Language lang);
 
  private:
-  I18n() : _language(Language::EN) {}
+  I18n() : _language(Language::KOREAN) {}
 
   Language _language;
 };
@@ -40,3 +40,4 @@ class I18n {
 // Convenience macros
 #define tr(id) I18n::getInstance().get(StrId::id)
 #define I18N I18n::getInstance()
+

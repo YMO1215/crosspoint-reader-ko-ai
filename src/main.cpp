@@ -39,16 +39,17 @@ FontCacheManager fontCacheManager(renderer.getFontMap());
 EpdFont kopub14RegularFont(&kopub_14_regular);
 EpdFontFamily kopub14FontFamily(&kopub14RegularFont);
 
-EpdFont smallFont(&ubuntu_10_regular);
+EpdFont pretendard10RegularFont(&pretendard_10_regular);
+EpdFontFamily uiFontFamily(&pretendard10RegularFont);
+
+EpdFont smallFont(&pretendard_10_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
-EpdFont ui10RegularFont(&ubuntu_10_regular);
-EpdFont ui10BoldFont(&ubuntu_10_bold);
-EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
+EpdFont ui10RegularFont(&pretendard_10_regular);
+EpdFontFamily ui10FontFamily(&ui10RegularFont);
 
-EpdFont ui12RegularFont(&ubuntu_12_regular);
-EpdFont ui12BoldFont(&ubuntu_12_bold);
-EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
+EpdFont ui12RegularFont(&pretendard_10_regular);
+EpdFontFamily ui12FontFamily(&ui12RegularFont);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
