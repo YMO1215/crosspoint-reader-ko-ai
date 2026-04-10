@@ -74,6 +74,17 @@ uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const s
   return renderer.getTextAdvanceX(fontId, sanitized.c_str(), style);
 }
 
+std::vector<std::string> splitUtf8Chars(const std::string& text) {
+  std::vector<std::string> chars;
+  const auto* ptr = reinterpret_cast<const unsigned char*>(text.c_str());
+  while (*ptr) {
+    const auto* start = ptr;
+    utf8NextCodepoint(&ptr);
+    chars.emplace_back(reinterpret_cast<const char*>(start), reinterpret_cast<const char*>(ptr));
+  }
+  return chars;
+}
+
 }  // namespace
 
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
@@ -89,6 +100,204 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   wordContinues.push_back(attachToPrevious);
 }
 
+void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
+                                     const int spaceWidth,
+                                     const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
+                                     const bool includeLastLine) {
+  const int pageWidth = viewportWidth;
+  const int minSpacing = spaceWidth;
+  const int maxSpacing = spaceWidth + (spaceWidth / 2);
+
+  while (!words.empty()) {
+    std::vector<std::string> lineWordsVec;
+    std::vector<int> lineWordWidths;
+    std::vector<EpdFontFamily::Style> lineWordStylesVec;
+    int totalWordWidth = 0;
+
+    while (!words.empty()) {
+      const std::string& word = words.front();
+      const EpdFontFamily::Style wordStyle = wordStyles.front();
+      const int wordWidth = renderer.getTextAdvanceX(fontId, word.c_str(), wordStyle);
+
+      int newTotalWidth = totalWordWidth + wordWidth;
+      int newGapCount = static_cast<int>(lineWordsVec.size());
+      int newSpareSpace = pageWidth - newTotalWidth;
+      int newSpacing = (newGapCount > 0) ? (newSpareSpace / newGapCount) : maxSpacing + 1;
+
+      if (lineWordsVec.empty()) {
+        if (wordWidth <= pageWidth) {
+          lineWordsVec.push_back(word);
+          lineWordWidths.push_back(wordWidth);
+          lineWordStylesVec.push_back(wordStyle);
+          totalWordWidth = wordWidth;
+          words.erase(words.begin());
+          wordStyles.erase(wordStyles.begin());
+          wordContinues.erase(wordContinues.begin());
+        } else {
+          auto chars = splitUtf8Chars(word);
+          std::string partial;
+          size_t charsFit = 0;
+          for (size_t i = 0; i < chars.size(); i++) {
+            std::string test = partial + chars[i];
+            int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), wordStyle);
+            if (testWidth > pageWidth) break;
+            partial = test;
+            charsFit = i + 1;
+          }
+          if (charsFit == 0) {
+            charsFit = 1;
+            partial = chars[0];
+          }
+          int partialWidth = renderer.getTextAdvanceX(fontId, partial.c_str(), wordStyle);
+          lineWordsVec.push_back(partial);
+          lineWordWidths.push_back(partialWidth);
+          lineWordStylesVec.push_back(wordStyle);
+          totalWordWidth = partialWidth;
+
+          if (charsFit < chars.size()) {
+            std::string remainder;
+            for (size_t i = charsFit; i < chars.size(); i++) remainder += chars[i];
+            words.front() = remainder;
+          } else {
+            words.erase(words.begin());
+            wordStyles.erase(wordStyles.begin());
+            wordContinues.erase(wordContinues.begin());
+          }
+        }
+      } else if (newSpacing >= minSpacing) {
+        lineWordsVec.push_back(word);
+        lineWordWidths.push_back(wordWidth);
+        lineWordStylesVec.push_back(wordStyle);
+        totalWordWidth = newTotalWidth;
+        words.erase(words.begin());
+        wordStyles.erase(wordStyles.begin());
+        wordContinues.erase(wordContinues.begin());
+
+        if (newSpacing <= maxSpacing) {
+          continue;
+        }
+      } else {
+        int currentGapCount = static_cast<int>(lineWordsVec.size());
+        int maxPartialWidth = pageWidth - totalWordWidth - currentGapCount * minSpacing;
+
+        if (maxPartialWidth > 0) {
+          auto chars = splitUtf8Chars(word);
+          std::string partial;
+          size_t charsFit = 0;
+          for (size_t i = 0; i < chars.size(); i++) {
+            std::string test = partial + chars[i];
+            int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), wordStyle);
+            if (testWidth > maxPartialWidth) break;
+            partial = test;
+            charsFit = i + 1;
+          }
+
+          if (charsFit > 0) {
+            int partialWidth = renderer.getTextAdvanceX(fontId, partial.c_str(), wordStyle);
+            lineWordsVec.push_back(partial);
+            lineWordWidths.push_back(partialWidth);
+            lineWordStylesVec.push_back(wordStyle);
+            totalWordWidth += partialWidth;
+
+            if (charsFit < chars.size()) {
+              std::string remainder;
+              for (size_t i = charsFit; i < chars.size(); i++) remainder += chars[i];
+              words.front() = remainder;
+            } else {
+              words.erase(words.begin());
+              wordStyles.erase(wordStyles.begin());
+              wordContinues.erase(wordContinues.begin());
+            }
+          }
+        }
+        break;
+      }
+    }
+
+    while (!words.empty() && !lineWordsVec.empty()) {
+      int gapCount = static_cast<int>(lineWordsVec.size());
+      int spareSpace = pageWidth - totalWordWidth;
+      int spacing = (gapCount > 0) ? (spareSpace / gapCount) : 0;
+      if (spacing <= maxSpacing) break;
+
+      const std::string& nextWord = words.front();
+      const EpdFontFamily::Style nextStyle = wordStyles.front();
+      auto chars = splitUtf8Chars(nextWord);
+
+      int minPartialWidth = pageWidth - totalWordWidth - gapCount * maxSpacing;
+      int maxPartialWidth = pageWidth - totalWordWidth - gapCount * minSpacing;
+      if (maxPartialWidth <= 0) break;
+
+      std::string partial;
+      int partialWidth = 0;
+      size_t charsFit = 0;
+      for (size_t i = 0; i < chars.size(); i++) {
+        std::string test = partial + chars[i];
+        int testWidth = renderer.getTextAdvanceX(fontId, test.c_str(), nextStyle);
+        if (testWidth > maxPartialWidth) break;
+        partial = test;
+        partialWidth = testWidth;
+        charsFit = i + 1;
+      }
+
+      if (charsFit == 0 || partialWidth < minPartialWidth) break;
+
+      lineWordsVec.push_back(partial);
+      lineWordWidths.push_back(partialWidth);
+      lineWordStylesVec.push_back(nextStyle);
+      totalWordWidth += partialWidth;
+
+      if (charsFit < chars.size()) {
+        std::string remainder;
+        for (size_t i = charsFit; i < chars.size(); i++) remainder += chars[i];
+        words.front() = remainder;
+      } else {
+        words.erase(words.begin());
+        wordStyles.erase(wordStyles.begin());
+        wordContinues.erase(wordContinues.begin());
+      }
+    }
+
+    bool isLastLine = words.empty();
+    int gapCount = static_cast<int>(lineWordsVec.size()) - 1;
+    int spareSpace = pageWidth - totalWordWidth;
+
+    std::vector<std::string> lineWords;
+    std::vector<int16_t> lineXPos;
+    std::vector<EpdFontFamily::Style> lineWordStyles;
+
+    if (isLastLine || gapCount <= 0) {
+      int xpos = 0;
+      for (size_t i = 0; i < lineWordsVec.size(); i++) {
+        lineXPos.push_back(static_cast<int16_t>(xpos));
+        lineWords.push_back(lineWordsVec[i]);
+        lineWordStyles.push_back(lineWordStylesVec[i]);
+        xpos += lineWordWidths[i] + minSpacing;
+      }
+    } else {
+      int baseSpacing = spareSpace / gapCount;
+      int extraPixels = spareSpace % gapCount;
+      int xpos = 0;
+      for (size_t i = 0; i < lineWordsVec.size(); i++) {
+        lineXPos.push_back(static_cast<int16_t>(xpos));
+        lineWords.push_back(lineWordsVec[i]);
+        lineWordStyles.push_back(lineWordStylesVec[i]);
+
+        if (i < lineWordsVec.size() - 1) {
+          int gap = baseSpacing + (static_cast<int>(i) < extraPixels ? 1 : 0);
+          xpos += lineWordWidths[i] + gap;
+        }
+      }
+    }
+
+    if (!lineWords.empty() && (!isLastLine || includeLastLine)) {
+      BlockStyle lineBlockStyle = blockStyle;
+      lineBlockStyle.alignment = isLastLine ? CssTextAlign::Left : CssTextAlign::Justify;
+      processLine(std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles),
+                                              lineBlockStyle));
+    }
+  }
+}
 // Consumes data to minimize memory usage
 void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
                                        const std::function<void(std::shared_ptr<TextBlock>)>& processLine,

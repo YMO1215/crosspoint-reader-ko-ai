@@ -34,6 +34,8 @@ class ParsedText {
                    const std::function<void(std::shared_ptr<TextBlock>)>& processLine, const GfxRenderer& renderer,
                    int fontId);
   std::vector<uint16_t> calculateWordWidths(const GfxRenderer& renderer, int fontId);
+  void layoutCharacterWrap(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth, int spaceWidth,
+                           const std::function<void(std::shared_ptr<TextBlock>)>& processLine, bool includeLastLine);
 
  public:
   explicit ParsedText(const bool extraParagraphSpacing, const bool paragraphIndent = false,
