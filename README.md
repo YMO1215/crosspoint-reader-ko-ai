@@ -1,12 +1,23 @@
-# CrossPoint Reader
+# CrossPoint Reader KO AI
 
-Firmware for the **Xteink X4** e-paper display reader (unaffiliated with Xteink).
+Korean-focused firmware for the **Xteink X4** e-paper display reader (unaffiliated with Xteink).
 Built using **PlatformIO** and targeting the **ESP32-C3** microcontroller.
 
-CrossPoint Reader is a purpose-built firmware designed to be a drop-in, fully open-source replacement for the official 
-Xteink firmware. It aims to match or improve upon the standard EPUB reading experience.
+This repository is an independent Korean adaptation of **CrossPoint Reader**, maintained as a separate project for
+Korean-language reading improvements, packaging, and release management. It is based on the upstream
+[`crosspoint-reader/crosspoint-reader`](https://github.com/crosspoint-reader/crosspoint-reader) project and includes
+AI-assisted rewriting and restructuring of parts of the codebase, documentation, and release workflow.
+
+CrossPoint Reader KO AI is intended to remain a drop-in, fully open-source replacement firmware for the official
+Xteink firmware while making the Korean user experience easier to install, understand, and maintain.
 
 ![](./docs/images/cover.jpg)
+
+## Project Positioning
+
+- Independent Korean-language edition of CrossPoint Reader
+- AI-assisted rewrite and maintenance workflow for selected code and docs
+- Separate GitHub repository and release management for Korean users
 
 ## Motivation
 
@@ -15,9 +26,10 @@ customisation. The **Xteink X4** is an affordable, e-paper device, however the o
 CrossPoint exists partly as a fun side-project and partly to open up the ecosystem and truely unlock the device's
 potential.
 
-CrossPoint Reader aims to:
+CrossPoint Reader KO AI aims to:
 * Provide a **fully open-source alternative** to the official firmware.
 * Offer a **document reader** capable of handling EPUB content on constrained hardware.
+* Improve the **Korean reading experience** through localisation, packaging, and maintenance.
 * Support **customisable font, layout, and display** options.
 * Run purely on the **Xteink X4 hardware**.
 
@@ -174,6 +186,10 @@ principles, please see [GOVERNANCE.md](GOVERNANCE.md).
 ---
 
 CrossPoint Reader is **not affiliated with Xteink or any manufacturer of the X4 hardware**.
+
+This repository is a separately maintained Korean adaptation based on
+[`crosspoint-reader/crosspoint-reader`](https://github.com/crosspoint-reader/crosspoint-reader). Original copyright
+notices and the MIT license are retained.
 
 Huge shoutout to [**diy-esp32-epub-reader** by atomic14](https://github.com/atomic14/diy-esp32-epub-reader), which was a project I took a lot of inspiration from as I
 was making CrossPoint.
