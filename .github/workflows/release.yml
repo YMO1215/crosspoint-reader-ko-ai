@@ -4,6 +4,9 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: ubuntu-latest
@@ -28,13 +31,25 @@ jobs:
       - name: Build CrossPoint
         run: pio run -e gh_release
 
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp .pio/build/gh_release/bootloader.bin "release/CrossPoint-${{ github.ref_name }}-bootloader.bin"
+          cp .pio/build/gh_release/firmware.bin "release/CrossPoint-${{ github.ref_name }}-firmware.bin"
+          cp .pio/build/gh_release/firmware.elf "release/CrossPoint-${{ github.ref_name }}-firmware.elf"
+          cp .pio/build/gh_release/firmware.map "release/CrossPoint-${{ github.ref_name }}-firmware.map"
+          cp .pio/build/gh_release/partitions.bin "release/CrossPoint-${{ github.ref_name }}-partitions.bin"
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CrossPoint-${{ github.ref_name }}
           path: |
-            .pio/build/gh_release/bootloader.bin
-            .pio/build/gh_release/firmware.bin
-            .pio/build/gh_release/firmware.elf
-            .pio/build/gh_release/firmware.map
-            .pio/build/gh_release/partitions.bin
+            release/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CrossPoint ${{ github.ref_name }}
+          body: Korean AI build based on CrossPoint ${{ github.ref_name }}.
+          files: release/*
