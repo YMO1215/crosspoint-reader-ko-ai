@@ -3,6 +3,7 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,8 @@ class FontSelectionActivity final : public ActivityWithSubactivity {
   void render();
   void loadFontList();
   void handleSelection();
+  int getFontIdForPreview(int index) const;
+  void renderPreviewPane(int top, int height, int fontId, const char* fontName) const;
 
   static constexpr const char* FONTS_DIR = "/.crosspoint/fonts";
   static constexpr const char* ROOT_FONTS_DIR = "/fonts";

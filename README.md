@@ -1,6 +1,6 @@
 # CrossPoint Reader
 
-[![CI (build)](https://github.com/crosspoint-reader-ko/crosspoint-reader-ko/actions/workflows/ci.yml/badge.svg)](https://github.com/crosspoint-reader-ko/crosspoint-reader-ko/actions/workflows/ci.yml) [![Compile Release](https://github.com/crosspoint-reader-ko/crosspoint-reader-ko/actions/workflows/release.yml/badge.svg)](https://github.com/crosspoint-reader-ko/crosspoint-reader-ko/actions/workflows/release.yml)
+[![CI (build)](https://github.com/YMO1215/crosspoint-reader-ko-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/YMO1215/crosspoint-reader-ko-ai/actions/workflows/ci.yml) [![Compile Release](https://github.com/YMO1215/crosspoint-reader-ko-ai/actions/workflows/release.yml/badge.svg)](https://github.com/YMO1215/crosspoint-reader-ko-ai/actions/workflows/release.yml)
 
 CrossPoint is open-source e-reader firmware - community-built, fully hackable, free forever. It's maintained by a growing community of developers and readers who believe your device should do what you want - not what a manufacturer decided for you.
 
@@ -121,21 +121,22 @@ See [Development quick start](#development-quick-start) below.
 
 ## Custom SD-card fonts
 
-Convert your own TTF/OTF files into `.cpfont` files that load from the SD card. No firmware reflash is needed.
+The Korean AI build uses `.epdfont` SD-card fonts for Korean/CJK stability. No
+firmware reflash is needed after copying fonts to the SD card.
 
-1. Go to https://crosspointreader.com/fonts and open the "SD-card font builder" form.
-2. Upload up to four styles (regular, bold, italic, bold-italic), set the family name, point sizes, and Unicode range.
-3. Download the generated `.cpfont` files.
-4. Copy them to your SD card under `/fonts/YourFont/` (or `/.fonts/YourFont/` to hide the folder).
-5. Select the font on the device from the font settings.
+1. Convert TTF/OTF files with `lib/EpdFont/scripts/ttf_to_epdfont.py`.
+2. Copy `.epdfont` files to `/.crosspoint/fonts`, `/.fonts`, `/fonts`, or `/fonts/<Family>/`.
+3. Select the reader font or system UI font on the device.
 
-Conversion runs the firmware repo's `lib/EpdFont/scripts/fontconvert_sdcard.py` script unmodified, so output matches a local host build.
+See [SD card fonts](./docs/sd-card-fonts.md) for details.
 
 ---
 
 ## Documentation
 
 - [User Guide](./USER_GUIDE.md)
+- [Korean AI update management](./docs/update-management.md)
+- [Release notes](./docs/release-notes/1.4.0-ko.0.md)
 - [Web server usage](./docs/webserver.md)
 - [Web server endpoints](./docs/webserver-endpoints.md)
 - [Project scope](./SCOPE.md)

@@ -58,8 +58,8 @@ so a device that had saved a now-removed language simply falls back to Korean.
 | + EN/KO only | 6,506,240 | 47,360 under |
 | + KO custom/system SD fonts restored (`gh_release`) | 6,512,224 | 41,376 under |
 
-The Korean custom reader font + UI system font (glyph-fallback to Pretendard) ride on upstream's
-`SdCardFont` engine (`.cpfont` v4), so re-adding them cost only ~6 KB.
+The Korean custom reader font + UI system font use the Korean `.epdfont`
+engine with glyph fallback to Pretendard.
 
 Headroom is ~41 KB. Any sizeable new feature will push `firmware.bin` back over
 the limit. Before adding flash-resident data, rebuild `gh_release` and check

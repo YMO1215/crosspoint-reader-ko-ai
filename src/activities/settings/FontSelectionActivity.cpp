@@ -1,10 +1,13 @@
 #include "FontSelectionActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <HardwareSerial.h>
 #include <Logging.h>
 
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 #include "CrossPointSettings.h"

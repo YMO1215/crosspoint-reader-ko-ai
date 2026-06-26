@@ -49,7 +49,6 @@ class ChapterHtmlSlimParser {
   uint16_t viewportWidth;
   uint16_t viewportHeight;
   bool hyphenationEnabled;
-  bool characterWrap;
   bool focusReadingEnabled;
   const CssParser* cssParser;
   bool embeddedStyle;
@@ -136,7 +135,6 @@ class ChapterHtmlSlimParser {
         viewportWidth(viewportWidth),
         viewportHeight(viewportHeight),
         hyphenationEnabled(hyphenationEnabled),
-        characterWrap(characterWrap),
         focusReadingEnabled(focusReadingEnabled),
         completePageFn(completePageFn),
         popupFn(popupFn),

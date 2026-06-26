@@ -2,7 +2,7 @@ name: CI (build)
 
 on:
   push:
-    branches: [ release/korean ]
+    branches: [ rebuild/1.2.0-ko, release/korean, master ]
   pull_request:
 
 permissions:

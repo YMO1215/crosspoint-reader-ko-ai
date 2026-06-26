@@ -17,9 +17,9 @@
 // clang-format on
 
 namespace {
-// Korean fork release URL
+// Korean AI fork release URL. Tags must use plain semver-ko form, e.g. 1.4.0-ko.0.
 constexpr char latestReleaseUrl[] =
-    "https://api.github.com/repos/crosspoint-reader-ko/crosspoint-reader-ko/releases/latest";
+    "https://api.github.com/repos/YMO1215/crosspoint-reader-ko-ai/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
