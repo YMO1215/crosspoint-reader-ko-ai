@@ -20,11 +20,21 @@ class ParsedText {
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
   bool paragraphIndent;
+  bool characterWrap;
   bool hyphenationEnabled;
   bool characterWrap;
   bool focusReadingEnabled;
+  bool isNaturalAlign;
+  bool hasRtlWord;
+  std::vector<std::string> reorderedWordsScratch;
+  std::vector<EpdFontFamily::Style> reorderedStylesScratch;
+  std::vector<uint16_t> reorderedWidthsScratch;
+  std::vector<bool> reorderedContinuesScratch;
+  std::vector<bool> reorderedFocusSuffixScratch;
+  std::vector<uint16_t> visualOrderScratch;
 
   void applyParagraphIndent();
+  int resolveFirstLineIndent(bool isFirstLine) const;
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec);
   std::vector<size_t> computeHyphenatedLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
@@ -40,15 +50,17 @@ class ParsedText {
                            const std::function<void(std::shared_ptr<TextBlock>)>& processLine, bool includeLastLine);
 
  public:
-  explicit ParsedText(const bool extraParagraphSpacing, const bool paragraphIndent = false,
-                      const bool hyphenationEnabled = false, const bool characterWrap = false,
-                      const bool focusReadingEnabled = false, const BlockStyle& blockStyle = BlockStyle())
+  explicit ParsedText(const bool extraParagraphSpacing, const bool paragraphIndent, const bool characterWrap = false,
+                      const bool hyphenationEnabled = false, const bool focusReadingEnabled = false,
+                      const BlockStyle& blockStyle = BlockStyle())
       : blockStyle(blockStyle),
         extraParagraphSpacing(extraParagraphSpacing),
         paragraphIndent(paragraphIndent),
-        hyphenationEnabled(hyphenationEnabled),
         characterWrap(characterWrap),
-        focusReadingEnabled(focusReadingEnabled) {}
+        hyphenationEnabled(hyphenationEnabled),
+        focusReadingEnabled(focusReadingEnabled),
+        isNaturalAlign(false),
+        hasRtlWord(false) {}
   ~ParsedText() = default;
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false);

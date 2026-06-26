@@ -1,76 +1,45 @@
 #include "OtaUpdater.h"
 
+// clang-format off
+// HttpDownloader.h pulls Arduino/SdFat, whose macros collide with lwip's
+// ip4_addr.h unless seen before esp_http_client (which includes lwip). Pin this
+// order; clang-format would otherwise sort the local header last and break the
+// build.
+#include "HttpDownloader.h"
+#include "FirmwareFlasher.h"
+#include <Arduino.h>
+#include <HalStorage.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
-#include <esp_https_ota.h>
 #include <esp_wifi.h>
+// clang-format on
 
 namespace {
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader-ko/crosspoint-reader-ko/releases/latest";
-
-esp_err_t http_client_set_header_cb(esp_http_client_handle_t http_client) {
-  return esp_http_client_set_header(http_client, "User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
-}
-
-size_t totalBytesReceived = 0;
-
-esp_err_t event_handler(esp_http_client_event_t* event) {
-  if (event->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
-  totalBytesReceived += event->data_len;
-  LOG_DBG("OTA", "HTTP chunk: %d bytes (total: %zu)", event->data_len, totalBytesReceived);
-  auto* parser = static_cast<ReleaseJsonParser*>(event->user_data);
-  parser->feed(static_cast<const char*>(event->data), event->data_len);
-  return ESP_OK;
-}
+// Korean fork release URL
+constexpr char latestReleaseUrl[] =
+    "https://api.github.com/repos/crosspoint-reader-ko/crosspoint-reader-ko/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
-  esp_err_t esp_err;
-  ReleaseJsonParser releaseParser;
-
-  esp_http_client_config_t client_config = {
-      .url = latestReleaseUrl,
-      .event_handler = event_handler,
-      .buffer_size = 8192,
-      .buffer_size_tx = 8192,
-      .user_data = &releaseParser,
-      .skip_cert_common_name_check = true,
-      .crt_bundle_attach = esp_crt_bundle_attach,
-      .keep_alive_enable = true,
-  };
-
-  totalBytesReceived = 0;
   LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
 
-  esp_http_client_handle_t client_handle = esp_http_client_init(&client_config);
-  if (!client_handle) {
-    LOG_ERR("OTA", "HTTP Client Handle Failed");
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  esp_err = esp_http_client_set_header(client_handle, "User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_set_header Failed : %s", esp_err_to_name(esp_err));
-    esp_http_client_cleanup(client_handle);
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  esp_err = esp_http_client_perform(client_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_perform Failed : %s", esp_err_to_name(esp_err));
-    esp_http_client_cleanup(client_handle);
+  // Stream the ~32KB release JSON straight into the parser as it arrives.
+  // Buffering the whole body in a std::string would add a growing allocation
+  // on top of the TLS session's heap during the fetch; with -fno-exceptions an
+  // OOM there aborts. fetchUrl handles the verified-https GET, redirects, and
+  // User-Agent (see HttpDownloader).
+  ReleaseJsonParser releaseParser;
+  const bool ok = HttpDownloader::fetchUrl(latestReleaseUrl, [&releaseParser](const uint8_t* data, size_t len) {
+    releaseParser.feed(reinterpret_cast<const char*>(data), len);
+    return true;
+  });
+  if (!ok) {
+    LOG_ERR("OTA", "Release check fetch failed");
     return HTTP_ERROR;
   }
 
-  esp_err = esp_http_client_cleanup(client_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
   LOG_DBG("OTA", "Parser results: tag=%s firmware=%s", releaseParser.foundTag() ? "yes" : "no",
           releaseParser.foundFirmware() ? "yes" : "no");
 
@@ -133,67 +102,237 @@ bool OtaUpdater::isUpdateNewer() const {
 
 const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
 
+bool OtaUpdater::isUpdateNewerKO() const {
+  if (!updateAvailable || latestVersion.empty() || latestVersion == CROSSPOINT_VERSION) {
+    return false;
+  }
+
+  // Parse version: major.minor.patch-ko.koVersion
+  auto parseVersion = [](const std::string& version, int& major, int& minor, int& patch, int& ko) {
+    major = minor = patch = ko = 0;
+
+    // Find -ko. suffix
+    size_t koPos = version.find("-ko.");
+    std::string baseVersion = (koPos != std::string::npos) ? version.substr(0, koPos) : version;
+
+    // Parse ko version if present
+    if (koPos != std::string::npos) {
+      ko = stoi(version.substr(koPos + 4));
+    }
+
+    // Parse major.minor.patch
+    size_t firstDot = baseVersion.find('.');
+    size_t lastDot = baseVersion.find_last_of('.');
+
+    if (firstDot != std::string::npos) {
+      major = stoi(baseVersion.substr(0, firstDot));
+      if (lastDot != firstDot) {
+        minor = stoi(baseVersion.substr(firstDot + 1, lastDot - firstDot - 1));
+        patch = stoi(baseVersion.substr(lastDot + 1));
+      } else {
+        minor = stoi(baseVersion.substr(firstDot + 1));
+      }
+    }
+  };
+
+  int updateMajor, updateMinor, updatePatch, updateKo;
+  int currentMajor, currentMinor, currentPatch, currentKo;
+
+  parseVersion(latestVersion, updateMajor, updateMinor, updatePatch, updateKo);
+  parseVersion(CROSSPOINT_VERSION, currentMajor, currentMinor, currentPatch, currentKo);
+
+  if (updateMajor != currentMajor) return updateMajor > currentMajor;
+  if (updateMinor != currentMinor) return updateMinor > currentMinor;
+  if (updatePatch != currentPatch) return updatePatch > currentPatch;
+  return updateKo > currentKo;
+}
+
+namespace {
+constexpr const char* kOtaSdPath = "/.crosspoint/ota_firmware.bin";
+
+// Stash the activity-side progress callback so the firmware-flasher's free
+// progress callback can fan back into it (we need a void* ctx hop).
+struct FlashCtx {
+  OtaUpdater* updater;
+  OtaUpdater::ProgressCallback onProgress;
+  void* userCtx;
+};
+
+// Per-call download state shared with the event handler.
+struct DownloadCtx {
+  OtaUpdater* updater;
+  HalFile* sdFile;
+  size_t written;
+  bool writeFailed;
+  OtaUpdater::ProgressCallback onProgress;
+  void* userCtx;
+};
+
+esp_err_t download_event_handler(esp_http_client_event_t* evt) {
+  auto* dctx = static_cast<DownloadCtx*>(evt->user_data);
+  switch (evt->event_id) {
+    case HTTP_EVENT_ON_HEADER:
+      // capture Content-Length when the server provides it
+      if (evt->header_key && evt->header_value && strcasecmp(evt->header_key, "Content-Length") == 0) {
+        const int len = atoi(evt->header_value);
+        if (len > 0) dctx->updater->setExpectedSize(static_cast<size_t>(len));
+      }
+      break;
+    case HTTP_EVENT_ON_DATA:
+      if (dctx->writeFailed) return ESP_OK;
+      if (evt->data_len > 0 && dctx->sdFile && *dctx->sdFile) {
+        const size_t want = static_cast<size_t>(evt->data_len);
+        const size_t wrote = dctx->sdFile->write(static_cast<const uint8_t*>(evt->data), want);
+        if (wrote != want) {
+          LOG_ERR("OTA", "SD write short @%u (got=%u want=%u)", static_cast<unsigned>(dctx->written),
+                  static_cast<unsigned>(wrote), static_cast<unsigned>(want));
+          dctx->writeFailed = true;
+          dctx->updater->setLastError("sd_write");
+          return ESP_FAIL;
+        }
+        dctx->written += want;
+        dctx->updater->setProcessed(dctx->written);
+        if (dctx->onProgress) dctx->onProgress(dctx->userCtx);
+      }
+      break;
+    default:
+      break;
+  }
+  return ESP_OK;
+}
+}  // namespace
+
+void OtaUpdater::setLastError(const std::string& err) { lastError = err; }
+void OtaUpdater::setExpectedSize(size_t s) {
+  totalSize = s;
+  render = true;
+}
+void OtaUpdater::setProcessed(size_t s) {
+  processedSize = s;
+  render = true;
+}
+
 OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgress, void* ctx) {
-  if (!isUpdateNewer()) {
+  lastError.clear();
+  if (!isUpdateNewerKO()) {
+    lastError = "not_newer";
     return UPDATE_OLDER_ERROR;
   }
 
-  esp_https_ota_handle_t ota_handle = NULL;
-  esp_err_t esp_err;
+  // Two-phase: (1) download the patched firmware.bin to SD via
+  // esp_http_client_perform (same proven pattern as checkForUpdate uses) +
+  // event handler that streams chunks straight to a file on the SD card,
+  // (2) flash that file using firmware_flash::flashFromSdPath. Skipping
+  // esp_https_ota_* avoids the running ESP-IDF's bogus esp_image_verify
+  // efuse-blk-rev rejection on X4 silicon. The cached SD file also lets
+  // the user retry the SD update flow if anything dies mid-flash.
+  phase = Phase::Downloading;
+  totalSize = otaSize;  // GitHub release asset size — pre-populated from checkForUpdate
+  processedSize = 0;
+  render = true;
+  if (onProgress) onProgress(ctx);
+
+  Storage.mkdir("/.crosspoint", true);
+
+  HalFile sdFile;
+  if (!Storage.openFileForWrite("OTA", kOtaSdPath, sdFile) || !sdFile) {
+    LOG_ERR("OTA", "open SD cache for write failed: %s", kOtaSdPath);
+    lastError = "sd_open";
+    return INTERNAL_UPDATE_ERROR;
+  }
+
+  DownloadCtx dctx{this, &sdFile, 0, false, onProgress, ctx};
 
   esp_http_client_config_t client_config = {
       .url = otaUrl.c_str(),
-      .timeout_ms = 15000,
-      /* Default HTTP client buffer size 512 byte only
-       * not sufficient to handle URL redirection cases or
-       * parsing of large HTTP headers.
-       */
+      .timeout_ms = 30000,
+      .event_handler = download_event_handler,
       .buffer_size = 8192,
       .buffer_size_tx = 8192,
-      .skip_cert_common_name_check = true,
+      .user_data = &dctx,
+      /* Enforce CN/SAN hostname verification — crt_bundle_attach validates the CA chain but
+       * hostname matching is a separate step. Leaving this true would let any cert signed by a
+       * trusted CA serve a tampered firmware over HTTPS. */
+      .skip_cert_common_name_check = false,
       .crt_bundle_attach = esp_crt_bundle_attach,
       .keep_alive_enable = true,
   };
 
-  esp_https_ota_config_t ota_config = {
-      .http_config = &client_config,
-      .http_client_init_cb = http_client_set_header_cb,
-  };
+  esp_http_client_handle_t client = esp_http_client_init(&client_config);
+  if (!client) {
+    LOG_ERR("OTA", "esp_http_client_init failed");
+    lastError = "http_init";
+    return INTERNAL_UPDATE_ERROR;
+  }
+  esp_http_client_set_header(client, "User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
 
-  /* For better timing and connectivity, we disable power saving for WiFi */
   esp_wifi_set_ps(WIFI_PS_NONE);
 
-  esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
-  if (esp_err != ESP_OK) {
-    LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  do {
-    esp_err = esp_https_ota_perform(ota_handle);
-    processedSize = esp_https_ota_get_image_len_read(ota_handle);
-    if (onProgress) onProgress(ctx);
-    delay(100);  // TODO: should we replace this with something better?
-  } while (esp_err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
-
-  /* Return back to default power saving for WiFi in case of failing */
+  esp_err_t err = esp_http_client_perform(client);
+  const int status = esp_http_client_get_status_code(client);
+  esp_http_client_cleanup(client);
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+  // Explicit close required before flashFromSdPath re-opens the same path for read.
+  sdFile.close();
 
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
+  if (err != ESP_OK) {
+    LOG_ERR("OTA", "http perform failed: %s (status=%d)", esp_err_to_name(err), status);
+    char buf[48];
+    snprintf(buf, sizeof(buf), "http_perform:%s", esp_err_to_name(err));
+    lastError = buf;
     return HTTP_ERROR;
   }
-
-  if (!esp_https_ota_is_complete_data_received(ota_handle)) {
-    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
-    return INTERNAL_UPDATE_ERROR;
+  if (status / 100 != 2) {
+    LOG_ERR("OTA", "http status %d", status);
+    char buf[24];
+    snprintf(buf, sizeof(buf), "http_status:%d", status);
+    lastError = buf;
+    return HTTP_ERROR;
   }
+  if (dctx.writeFailed) {
+    return INTERNAL_UPDATE_ERROR;  // lastError already set
+  }
+  if (dctx.written == 0) {
+    LOG_ERR("OTA", "no body bytes received");
+    lastError = "empty_body";
+    return HTTP_ERROR;
+  }
+  // Reject truncated downloads before flashing. The firmware-flasher only does a magic-byte /
+  // min-size check on the SD file, so a short body (network drop after Content-Length is known)
+  // would otherwise still go through and brick on reboot.
+  const size_t expectedSize = totalSize > 0 ? totalSize : otaSize;
+  if (expectedSize > 0 && dctx.written != expectedSize) {
+    LOG_ERR("OTA", "short body: got=%u want=%u", static_cast<unsigned>(dctx.written),
+            static_cast<unsigned>(expectedSize));
+    char buf[48];
+    snprintf(buf, sizeof(buf), "short_body:%u/%u", static_cast<unsigned>(dctx.written),
+             static_cast<unsigned>(expectedSize));
+    lastError = buf;
+    return HTTP_ERROR;
+  }
+  LOG_INF("OTA", "download complete: %u bytes -> %s", static_cast<unsigned>(dctx.written), kOtaSdPath);
 
-  esp_err = esp_https_ota_finish(ota_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
+  // Phase 2: flash from SD using the shared firmware flasher.
+  phase = Phase::Flashing;
+  totalSize = dctx.written;
+  processedSize = 0;
+  render = true;
+  if (onProgress) onProgress(ctx);
+
+  FlashCtx flashCtx{this, onProgress, ctx};
+  auto progressCb = +[](size_t written, size_t total, void* fctx) {
+    auto* fc = static_cast<FlashCtx*>(fctx);
+    fc->updater->setProcessed(written);
+    fc->updater->setExpectedSize(total);
+    if (fc->onProgress) fc->onProgress(fc->userCtx);
+  };
+
+  const auto fr = firmware_flash::flashFromSdPath(kOtaSdPath, progressCb, &flashCtx);
+  if (fr != firmware_flash::Result::OK) {
+    LOG_ERR("OTA", "flash failed: %s", firmware_flash::resultName(fr));
+    char buf[32];
+    snprintf(buf, sizeof(buf), "flash:%s", firmware_flash::resultName(fr));
+    lastError = buf;
     return INTERNAL_UPDATE_ERROR;
   }
 

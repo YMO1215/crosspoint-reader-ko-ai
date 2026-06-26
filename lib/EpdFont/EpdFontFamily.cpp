@@ -28,6 +28,32 @@ const EpdGlyph* EpdFontFamily::getGlyph(const uint32_t cp, const Style style) co
   return getFont(style)->getGlyph(cp);
 }
 
+bool EpdFontFamily::hasPrintableChars(const char* string, const Style style) const {
+  const EpdFont* font = getFont(style);
+  if (!font || !string) return false;
+  const uint8_t* p = reinterpret_cast<const uint8_t*>(string);
+  while (*p) {
+    uint32_t cp;
+    if (*p < 0x80) {
+      cp = *p++;
+    } else if ((*p & 0xE0) == 0xC0) {
+      cp = (*p++ & 0x1F) << 6;
+      if (*p) cp |= (*p++ & 0x3F);
+    } else if ((*p & 0xF0) == 0xE0) {
+      cp = (*p++ & 0x0F) << 12;
+      if (*p) cp |= (*p++ & 0x3F) << 6;
+      if (*p) cp |= (*p++ & 0x3F);
+    } else {
+      cp = (*p++ & 0x07) << 18;
+      if (*p) cp |= (*p++ & 0x3F) << 12;
+      if (*p) cp |= (*p++ & 0x3F) << 6;
+      if (*p) cp |= (*p++ & 0x3F);
+    }
+    if (font->getGlyph(cp)) return true;
+  }
+  return false;
+}
+
 int8_t EpdFontFamily::getKerning(const uint32_t leftCp, const uint32_t rightCp, const Style style) const {
   return getFont(style)->getKerning(leftCp, rightCp);
 }

@@ -64,7 +64,7 @@ class Bitmap {
  public:
   static const char* errorToString(BmpReaderError err);
 
-  explicit Bitmap(FsFile& file, bool dithering = false) : file(file), dithering(dithering) {}
+  explicit Bitmap(HalFile& file, bool dithering = false) : file(file), dithering(dithering) {}
   ~Bitmap();
   BmpReaderError parseHeaders();
   BmpReaderError readNextRow(uint8_t* data, uint8_t* rowBuffer) const;
@@ -76,12 +76,16 @@ class Bitmap {
   int getRowBytes() const { return rowBytes; }
   bool is1Bit() const { return bpp == 1; }
   uint16_t getBpp() const { return bpp; }
+  // Byte offset from start of file to pixel data (file+DIB+palette size).
+  // Populated by parseHeaders(). Used to compute the exact expected file size
+  // for a well-formed BMP (varies by bit depth: ~62 for 1-bit, ~1078 for 8-bit).
+  uint32_t getDataOffset() const { return bfOffBits; }
 
  private:
-  static uint16_t readLE16(FsFile& f);
-  static uint32_t readLE32(FsFile& f);
+  static uint16_t readLE16(HalFile& f);
+  static uint32_t readLE32(HalFile& f);
 
-  FsFile& file;
+  HalFile& file;
   bool dithering = false;
   int width = 0;
   int height = 0;

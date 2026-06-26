@@ -1,8 +1,8 @@
 #pragma once
 
+#include <HalClock.h>
 #include <HalTiltSensor.h>
 #include <I18n.h>
-#include <SdCardFontRegistry.h>
 
 #include <algorithm>
 #include <cstring>
@@ -13,113 +13,30 @@
 #include "KOReaderCredentialStore.h"
 #include "activities/settings/SettingsActivity.h"
 
-// Build the font family setting dynamically. When registry is non-null, SD card fonts
-// are appended after the built-in fonts. Otherwise only built-in fonts are listed.
-inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
-  // Built-in font labels (StrId)
-#ifdef OMIT_FONTS
-  std::vector<StrId> enumValues = {StrId::STR_KOPUB_BATANG};
-#else
-  std::vector<StrId> enumValues = {StrId::STR_KOPUB_BATANG, StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS,
-                                   StrId::STR_OPEN_DYSLEXIC};
-#endif
-  // Runtime string labels for SD card fonts
-  std::vector<std::string> enumStringValues;
-
-  // Reserve: first CrossPointSettings::BUILTIN_FONT_COUNT entries use StrId, rest use strings
-  if (registry) {
-    const auto& families = registry->getFamilies();
-    enumStringValues.reserve(families.size());
-    std::transform(families.begin(), families.end(), std::back_inserter(enumStringValues),
-                   [](const SdCardFontFamilyInfo& f) { return f.name; });
-  }
-
-  // Capture the SD font count for the lambdas
-  const int sdFontCount = static_cast<int>(enumStringValues.size());
-
-  // Total option count = built-in + SD card families
-  // For the combined enumStringValues: we need all entries as strings (built-in names + SD names)
-  // The render code checks enumStringValues first, then enumValues. So we build enumStringValues
-  // with all options when SD fonts are present.
-  std::vector<std::string> allStringValues;
-  if (sdFontCount > 0) {
-    allStringValues.push_back(I18N.get(StrId::STR_KOPUB_BATANG));
-#ifndef OMIT_FONTS
-    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SERIF));
-    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SANS));
-    allStringValues.push_back(I18N.get(StrId::STR_OPEN_DYSLEXIC));
-#endif
-    allStringValues.insert(allStringValues.end(), enumStringValues.begin(), enumStringValues.end());
-  }
-
-  SettingInfo s;
-  s.nameId = StrId::STR_FONT_FAMILY;
-  s.type = SettingType::ENUM;
-  s.enumValues = std::move(enumValues);
-  s.enumStringValues = std::move(allStringValues);
-  s.key = "fontFamily";
-  s.category = StrId::STR_CAT_READER;
-
-  // Capture registry families by copy for the lambdas
-  std::vector<std::string> sdFamilyNames;
-  if (registry) {
-    const auto& families = registry->getFamilies();
-    sdFamilyNames.reserve(families.size());
-    std::transform(families.begin(), families.end(), std::back_inserter(sdFamilyNames),
-                   [](const SdCardFontFamilyInfo& f) { return f.name; });
-  }
-
-  s.valueGetter = [sdFamilyNames]() -> uint8_t {
-    // If an SD card font is selected, find its index
-    if (SETTINGS.sdFontFamilyName[0] != '\0') {
-      for (int i = 0; i < static_cast<int>(sdFamilyNames.size()); i++) {
-        if (sdFamilyNames[i] == SETTINGS.sdFontFamilyName) {
-          return static_cast<uint8_t>(CrossPointSettings::BUILTIN_FONT_COUNT + i);
-        }
-      }
-      // SD font name not found in registry — fall through to built-in
-    }
-    return SETTINGS.fontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? SETTINGS.fontFamily : 0;
-  };
-
-  s.valueSetter = [sdFamilyNames](uint8_t v) {
-    if (v < CrossPointSettings::BUILTIN_FONT_COUNT) {
-      SETTINGS.fontFamily = v;
-      SETTINGS.sdFontFamilyName[0] = '\0';
-    } else {
-      int sdIdx = v - CrossPointSettings::BUILTIN_FONT_COUNT;
-      if (sdIdx < static_cast<int>(sdFamilyNames.size())) {
-        strncpy(SETTINGS.sdFontFamilyName, sdFamilyNames[sdIdx].c_str(), sizeof(SETTINGS.sdFontFamilyName) - 1);
-        SETTINGS.sdFontFamilyName[sizeof(SETTINGS.sdFontFamilyName) - 1] = '\0';
-      }
-    }
-  };
-
-  return s;
-}
-
 // Shared settings list used by both the device settings UI and the web settings API.
 // Each entry has a key (for JSON API) and category (for grouping).
 // ACTION-type entries and entries without a key are device-only.
 //
-// The static list is constructed exactly once (master's optimization, #1086 +
-// #1636) so the per-entry SettingInfo cost is paid once. When an
-// SdCardFontRegistry is supplied AND has SD card fonts installed, the
-// font-family entry is replaced in a per-call copy with a registry-aware
-// version. Callers without SD fonts pay only a vector copy.
-inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry = nullptr) {
+// The static list is constructed exactly once so the per-entry SettingInfo cost is paid once.
+// The Korean build hides the upstream font-family picker (font selection routes through the
+// FontSelection action) and gates the Focus Reading toggle to English, so getSettingsList()
+// returns a per-call copy that the language filter can adjust.
+inline std::vector<SettingInfo> getSettingsList() {
   static const std::vector<SettingInfo> baseList = [] {
     std::vector<SettingInfo> v = {
         // --- Display ---
         SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
                           {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
-                           StrId::STR_COVER_CUSTOM},
+                           StrId::STR_COVER_CUSTOM, StrId::STR_QUICK_RESUME},
                           "sleepScreen", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
                           {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_SLEEP_COVER_FILTER, &CrossPointSettings::sleepScreenCoverFilter,
                           {StrId::STR_NONE_OPT, StrId::STR_FILTER_CONTRAST, StrId::STR_INVERTED},
                           "sleepScreenCoverFilter", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(StrId::STR_QUICK_RESUME_TIMEOUT, &CrossPointSettings::quickResumeSleepScreen,
+                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, "quickResumeSleepScreen",
+                          StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                           {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideBatteryPercentage",
                           StrId::STR_CAT_DISPLAY),
@@ -135,20 +52,9 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                             StrId::STR_CAT_DISPLAY),
 
         // --- Reader ---
-        // Built-in font-family entry. Replaced per-call with a registry-aware
-        // version when SD fonts are installed.
-#ifdef OMIT_FONTS
-        SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily, {StrId::STR_KOPUB_BATANG},
-                          "fontFamily", StrId::STR_CAT_READER),
-#else
-        SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                          {StrId::STR_KOPUB_BATANG, StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS,
-                           StrId::STR_OPEN_DYSLEXIC},
-                          "fontFamily", StrId::STR_CAT_READER),
-#endif
-        SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
-                          {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}, "fontSize",
-                          StrId::STR_CAT_READER),
+        // fontFamily/fontSize entries omitted: the Korean reader uses KoPub Batang or a custom
+        // SD font (FontSelectionActivity, Target::Reader) and adjusts size via the reader menu.
+        // Upstream's built-in NotoSerif/NotoSans are not loaded in this build.
         SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                           {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}, "lineSpacing", StrId::STR_CAT_READER),
         SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",
@@ -159,6 +65,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                           "paragraphAlignment", StrId::STR_CAT_READER),
         SettingInfo::Toggle(StrId::STR_EMBEDDED_STYLE, &CrossPointSettings::embeddedStyle, "embeddedStyle",
                             StrId::STR_CAT_READER),
+        // Focus Reading is English-only in the Korean build; the language filter below removes
+        // this entry whenever the UI language is not English.
         SettingInfo::Toggle(StrId::STR_FOCUS_READING, &CrossPointSettings::focusReadingEnabled, "focusReadingEnabled",
                             StrId::STR_CAT_READER),
         SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled, "hyphenationEnabled",
@@ -168,7 +76,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                           "orientation", StrId::STR_CAT_READER),
         SettingInfo::Toggle(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacing,
                             "extraParagraphSpacing", StrId::STR_CAT_READER),
-        SettingInfo::Toggle(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::paragraphIndent, "paragraphIndent",
+        SettingInfo::Toggle(StrId::STR_PARAGRAPH_INDENT, &CrossPointSettings::paragraphIndent, "paragraphIndent",
                             StrId::STR_CAT_READER),
         SettingInfo::Toggle(StrId::STR_CHARACTER_WRAP, &CrossPointSettings::characterWrap, "characterWrap",
                             StrId::STR_CAT_READER),
@@ -179,21 +87,31 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                           "imageRendering", StrId::STR_CAT_READER),
         // --- Controls ---
         SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
-                          {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}, "sideButtonLayout", StrId::STR_CAT_CONTROLS),
+                          {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV, StrId::STR_DISABLED}, "sideButtonLayout",
+                          StrId::STR_CAT_CONTROLS),
+        SettingInfo::Toggle(StrId::STR_FRONT_BTN_FOLLOW_ORIENTATION, &CrossPointSettings::frontButtonFollowOrientation,
+                            "frontButtonFollowOrientation", StrId::STR_CAT_CONTROLS),
         SettingInfo::Enum(StrId::STR_LONG_PRESS_BEHAVIOR, &CrossPointSettings::longPressButtonBehavior,
                           {StrId::STR_LONG_PRESS_BEHAVIOR_OFF, StrId::STR_LONG_PRESS_BEHAVIOR_SKIP,
                            StrId::STR_LONG_PRESS_BEHAVIOR_ORIENTATION},
                           "longPressButtonBehavior", StrId::STR_CAT_CONTROLS),
-        SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                          {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH},
-                          "shortPwrBtn", StrId::STR_CAT_CONTROLS),
-
+        SettingInfo::Enum(
+            StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
+            {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH, StrId::STR_FOOTNOTES},
+            "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+        SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
+                            "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS),
         // --- System ---
-        SettingInfo::Enum(StrId::STR_TIME_TO_SLEEP, &CrossPointSettings::sleepTimeout,
-                          {StrId::STR_MIN_1, StrId::STR_MIN_5, StrId::STR_MIN_10, StrId::STR_MIN_15, StrId::STR_MIN_30},
-                          "sleepTimeout", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Value(
+            StrId::STR_TIME_TO_SLEEP, &CrossPointSettings::sleepTimeoutMinutes,
+            {CrossPointSettings::MIN_SLEEP_TIMEOUT_MINUTES, CrossPointSettings::MAX_SLEEP_TIMEOUT_MINUTES, 1},
+            "sleepTimeoutMinutes", StrId::STR_CAT_SYSTEM),
         SettingInfo::Toggle(StrId::STR_SHOW_HIDDEN_FILES, &CrossPointSettings::showHiddenFiles, "showHiddenFiles",
                             StrId::STR_CAT_SYSTEM),
+        SettingInfo::Toggle(StrId::STR_REMOVE_READ_FROM_RECENTS, &CrossPointSettings::removeReadBooksFromRecents,
+                            "removeReadBooksFromRecents", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Toggle(StrId::STR_MOVE_FINISHED_TO_READ, &CrossPointSettings::moveFinishedToReadFolder,
+                            "moveFinishedToReadFolder", StrId::STR_CAT_SYSTEM),
 
         // --- KOReader Sync (web-only, uses KOReaderCredentialStore) ---
         SettingInfo::DynamicString(
@@ -225,6 +143,15 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
               KOREADER_STORE.saveToFile();
             },
             "koMatchMethod", StrId::STR_KOREADER_SYNC),
+
+        // --- OPDS Browser (web-only, uses CrossPointSettings char arrays) ---
+        SettingInfo::String(StrId::STR_OPDS_SERVER_URL, SETTINGS.opdsServerUrl, sizeof(SETTINGS.opdsServerUrl),
+                            "opdsServerUrl", StrId::STR_OPDS_BROWSER),
+        SettingInfo::String(StrId::STR_USERNAME, SETTINGS.opdsUsername, sizeof(SETTINGS.opdsUsername), "opdsUsername",
+                            StrId::STR_OPDS_BROWSER),
+        SettingInfo::String(StrId::STR_PASSWORD, SETTINGS.opdsPassword, sizeof(SETTINGS.opdsPassword), "opdsPassword",
+                            StrId::STR_OPDS_BROWSER)
+            .withObfuscated(),
         // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
         SettingInfo::Toggle(StrId::STR_CHAPTER_PAGE_COUNT, &CrossPointSettings::statusBarChapterPageCount,
                             "statusBarChapterPageCount", StrId::STR_CUSTOMISE_STATUS_BAR),
@@ -244,10 +171,23 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Enum(StrId::STR_XTC_STATUS_BAR, &CrossPointSettings::xtcStatusBarMode,
                           {StrId::STR_HIDE, StrId::STR_BOTTOM, StrId::STR_TOP}, "xtcStatusBarMode",
                           StrId::STR_CUSTOMISE_STATUS_BAR),
+        // Clock entries (web settings only; device UI uses ClockOffsetActivity for the offset).
+        // Range 0..104 = quarter-hour steps from UTC-12:00 to UTC+14:00, biased by 48.
+        SettingInfo::Toggle(StrId::STR_CLOCK, &CrossPointSettings::statusBarClock, "statusBarClock",
+                            StrId::STR_CUSTOMISE_STATUS_BAR),
+        SettingInfo::Value(StrId::STR_CLOCK_UTC_OFFSET, &CrossPointSettings::clockUtcOffsetQ, {0, 104, 1},
+                           "clockUtcOffsetQ", StrId::STR_CUSTOMISE_STATUS_BAR),
+        SettingInfo::Enum(StrId::STR_CLOCK_FORMAT, &CrossPointSettings::clockFormat,
+                          {StrId::STR_CLOCK_FORMAT_24H, StrId::STR_CLOCK_FORMAT_12H}, "clockFormat",
+                          StrId::STR_CUSTOMISE_STATUS_BAR),
+        // Persistence flag for NTP debounce. Resetting from the web UI forces a re-sync
+        // on next WiFi connect, which is useful when crossing time zones.
+        SettingInfo::Toggle(StrId::STR_CLOCK_SYNCED, &CrossPointSettings::clockHasBeenSynced, "clockHasBeenSynced",
+                            StrId::STR_CUSTOMISE_STATUS_BAR),
     };
-    // Only show tilt page turn setting when the QMI8658 IMU is present (X3)
+    // Only show tilt page turn setting when the QMI8658 IMU is present (X3).
+    // Insert after the short power button setting (end of Controls section).
     if (halTiltSensor.isAvailable()) {
-      // Insert after the short power button setting (end of Controls section)
       for (auto it = v.begin(); it != v.end(); ++it) {
         if (it->nameId == StrId::STR_SHORT_PWR_BTN) {
           v.insert(it + 1, SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
@@ -261,11 +201,14 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
   }();
 
   std::vector<SettingInfo> v = baseList;
-  if (registry && registry->getFamilyCount() > 0) {
-    auto it = std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_FONT_FAMILY; });
-    if (it != v.end()) {
-      *it = buildFontFamilySetting(registry);
-    }
+
+  // Focus Reading is English-only: word-prefix bolding has no meaning for Korean (or other
+  // non-space-delimited / non-Latin) text, so hide the toggle unless the UI language is English.
+  // The reader also force-disables the effect for non-English content (see ReaderUtils).
+  if (I18N.getLanguage() != Language::EN) {
+    v.erase(
+        std::remove_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_FOCUS_READING; }),
+        v.end());
   }
   return v;
 }

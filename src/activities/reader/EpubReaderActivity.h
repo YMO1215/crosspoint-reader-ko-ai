@@ -6,7 +6,9 @@
 #include <optional>
 
 #include "EpubReaderMenuActivity.h"
+#include "ProgressMapper.h"
 #include "activities/Activity.h"
+#include "util/ReadingTimer.h"
 
 class EpubReaderActivity final : public Activity {
   std::shared_ptr<Epub> epub;
@@ -18,6 +20,7 @@ class EpubReaderActivity final : public Activity {
   // Cleared on the next render after the new section loads and resolves it to a page.
   std::string pendingAnchor;
   int pagesUntilFullRefresh = 0;
+  int cachedFontId = 0;
   int cachedSpineIndex = 0;
   int cachedChapterTotalPageCount = 0;
   unsigned long lastPageTurnTime = 0UL;
@@ -31,6 +34,19 @@ class EpubReaderActivity final : public Activity {
   bool pendingSyncSaveError = false;
   bool skipNextButtonCheck = false;  // Skip button processing for one frame after subactivity exit
   bool automaticPageTurnActive = false;
+  bool showBookmarkMessage = false;
+  bool ignoreNextConfirmRelease = false;
+  // Tracks whether this book is currently removed from Recent Books by the
+  // removeReadBooksFromRecents feature (set at End-of-Book, cleared if paged back in).
+  bool recentsEntryRemoved = false;
+  unsigned long bookmarkMessageTime = 0UL;
+  // Set when the reader is left at end-of-book and SETTINGS.moveFinishedToReadFolder is on.
+  // Consumed in onExit() to relocate the finished book into /Read/.
+  bool pendingReadFolderMove = false;
+
+  // Per-book reading-time accumulator. Loaded in onEnter, ticked in loop,
+  // saved on mid-cadence and onExit. See util/ReadingTimer.h for semantics.
+  ReadingTimer readingTimer;
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
@@ -53,6 +69,7 @@ class EpubReaderActivity final : public Activity {
   void applyOrientation(uint8_t orientation);
   void toggleAutoPageTurn(uint8_t selectedPageTurnOption);
   void pageTurn(bool isForwardTurn);
+  void addBookmark();
 
   // Footnote navigation
   void navigateToHref(const std::string& href, bool savePosition = false);
@@ -66,5 +83,9 @@ class EpubReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&& lock) override;
   bool isReaderActivity() const override { return true; }
+  // Prevent auto-sleep while auto page-turn is running so long unattended
+  // reads don't get cut off by the global inactivity timer.
+  bool preventAutoSleep() override { return automaticPageTurnActive; }
   ScreenshotInfo getScreenshotInfo() const override;
+  CrossPointPosition getCurrentPosition() const;
 };

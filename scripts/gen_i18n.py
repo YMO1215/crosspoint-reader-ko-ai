@@ -584,19 +584,19 @@ def generate_keys_header(
 
     # V1 language.bin migration table -- frozen enum order from commit 2f969a9.
     # Maps the old uint8_t index stored on disk to the current Language enum.
-    # If a Language enum value listed here is ever removed, this will fail to
-    # compile, signalling that the migration table needs updating.
+    # Languages dropped from this build (e.g. the Korean fork ships only EN+KO)
+    # map to a fallback language so the table always compiles; a device that had
+    # saved a now-removed language just falls back to the fallback UI language.
     v1_codes = [
         "EN", "ES", "FR", "DE", "CS", "PT", "RU", "SV", "RO", "CA", "UK",
         "BE", "IT", "PL", "FI", "DA", "NL", "TR", "KK", "HU", "LT", "SI",
     ]
+    v1_fallback = "KOREAN" if "KOREAN" in languages else languages[0]
     lines.append("// V1 language.bin migration table (frozen enum order from 2f969a9)")
+    lines.append("// Languages not built into this firmware map to the fallback UI language.")
     lines.append("constexpr Language V1_LANGUAGES[] = {")
-    available_languages = set(languages)
     lines.append(
-        "    "
-        + ", ".join(f"Language::{c}" if c in available_languages else "Language::EN" for c in v1_codes)
-        + ","
+        "    " + ", ".join(f"Language::{c if c in languages else v1_fallback}" for c in v1_codes) + ","
     )
     lines.append("};")
     lines.append(

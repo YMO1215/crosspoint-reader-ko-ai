@@ -1,61 +1,12 @@
 #pragma once
 
-// Korean build fonts
-#include <builtinFonts/kopub_14_regular.h>
+// Korean build ships only KoPub Batang (reader) + Pretendard (UI) to stay within the
+// 6.25 MB OTA size budget. Upstream's NotoSerif/NotoSans/Ubuntu built-ins are intentionally
+// NOT included here; src/main.cpp loads only the fonts below. The NOTOSERIF_*/NOTOSANS_*
+// font IDs in fontIds.h remain defined so upstream code compiles, but their font data is absent.
+
+// UI fonts (Pretendard 10pt) - Regular only, synthetic bold used when needed
 #include <builtinFonts/pretendard_10_regular.h>
 
-#ifndef OMIT_FONTS
-#include <builtinFonts/notoserif_12_bold.h>
-#include <builtinFonts/notoserif_12_bolditalic.h>
-#include <builtinFonts/notoserif_12_italic.h>
-#include <builtinFonts/notoserif_12_regular.h>
-#include <builtinFonts/notoserif_14_bold.h>
-#include <builtinFonts/notoserif_14_bolditalic.h>
-#include <builtinFonts/notoserif_14_italic.h>
-#include <builtinFonts/notoserif_14_regular.h>
-#include <builtinFonts/notoserif_16_bold.h>
-#include <builtinFonts/notoserif_16_bolditalic.h>
-#include <builtinFonts/notoserif_16_italic.h>
-#include <builtinFonts/notoserif_16_regular.h>
-#include <builtinFonts/notoserif_18_bold.h>
-#include <builtinFonts/notoserif_18_bolditalic.h>
-#include <builtinFonts/notoserif_18_italic.h>
-#include <builtinFonts/notoserif_18_regular.h>
-#include <builtinFonts/notosans_8_regular.h>
-#include <builtinFonts/notosans_12_bold.h>
-#include <builtinFonts/notosans_12_bolditalic.h>
-#include <builtinFonts/notosans_12_italic.h>
-#include <builtinFonts/notosans_12_regular.h>
-#include <builtinFonts/notosans_14_bold.h>
-#include <builtinFonts/notosans_14_bolditalic.h>
-#include <builtinFonts/notosans_14_italic.h>
-#include <builtinFonts/notosans_14_regular.h>
-#include <builtinFonts/notosans_16_bold.h>
-#include <builtinFonts/notosans_16_bolditalic.h>
-#include <builtinFonts/notosans_16_italic.h>
-#include <builtinFonts/notosans_16_regular.h>
-#include <builtinFonts/notosans_18_bold.h>
-#include <builtinFonts/notosans_18_bolditalic.h>
-#include <builtinFonts/notosans_18_italic.h>
-#include <builtinFonts/notosans_18_regular.h>
-#include <builtinFonts/opendyslexic_10_bold.h>
-#include <builtinFonts/opendyslexic_10_bolditalic.h>
-#include <builtinFonts/opendyslexic_10_italic.h>
-#include <builtinFonts/opendyslexic_10_regular.h>
-#include <builtinFonts/opendyslexic_12_bold.h>
-#include <builtinFonts/opendyslexic_12_bolditalic.h>
-#include <builtinFonts/opendyslexic_12_italic.h>
-#include <builtinFonts/opendyslexic_12_regular.h>
-#include <builtinFonts/opendyslexic_14_bold.h>
-#include <builtinFonts/opendyslexic_14_bolditalic.h>
-#include <builtinFonts/opendyslexic_14_italic.h>
-#include <builtinFonts/opendyslexic_14_regular.h>
-#include <builtinFonts/opendyslexic_8_bold.h>
-#include <builtinFonts/opendyslexic_8_bolditalic.h>
-#include <builtinFonts/opendyslexic_8_italic.h>
-#include <builtinFonts/opendyslexic_8_regular.h>
-#include <builtinFonts/ubuntu_10_bold.h>
-#include <builtinFonts/ubuntu_10_regular.h>
-#include <builtinFonts/ubuntu_12_bold.h>
-#include <builtinFonts/ubuntu_12_regular.h>
-#endif  // OMIT_FONTS
+// Korean EPUB reader font (KoPub Batang 14pt) - Regular only, synthetic bold used when needed
+#include <builtinFonts/kopub_14_regular.h>

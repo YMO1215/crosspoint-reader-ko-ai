@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "../Activity.h"
+#include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
 class EpubReaderMenuActivity final : public Activity {
@@ -17,16 +17,20 @@ class EpubReaderMenuActivity final : public Activity {
     GO_TO_PERCENT,
     AUTO_PAGE_TURN,
     ROTATE_SCREEN,
+    BOOKMARKS,
     SCREENSHOT,
     DISPLAY_QR,
     GO_HOME,
     SYNC,
-    DELETE_CACHE
+    DELETE_CACHE,
+    RESET_READING_TIMER,
+    READER_OPTIONS
   };
 
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
-                                  const uint8_t currentOrientation, const bool hasFootnotes);
+                                  const uint8_t currentOrientation, const bool hasFootnotes,
+                                  const uint32_t totalReadingSeconds);
 
   void onEnter() override;
   void onExit() override;
@@ -56,4 +60,5 @@ class EpubReaderMenuActivity final : public Activity {
   int currentPage = 0;
   int totalPages = 0;
   int bookProgressPercent = 0;
+  uint32_t totalReadingSeconds = 0;
 };

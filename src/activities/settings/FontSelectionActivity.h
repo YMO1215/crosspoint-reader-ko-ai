@@ -1,34 +1,54 @@
 #pragma once
-
-#include <SdCardFontRegistry.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 
 #include <string>
 #include <vector>
 
-#include "activities/Activity.h"
-#include "util/ButtonNavigator.h"
+#include "activities/ActivityWithSubactivity.h"
 
-class FontSelectionActivity final : public Activity {
+/**
+ * Activity for selecting a custom font from /.crosspoint/fonts folder.
+ * Lists .bin font files and allows the user to select one.
+ */
+class FontSelectionActivity final : public ActivityWithSubactivity {
  public:
-  explicit FontSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                 const SdCardFontRegistry* registry);
+  // Which font slot this picker configures:
+  //   Reader  -> SETTINGS.customFontPath (EPUB body font; default KoPub Batang)
+  //   System  -> SETTINGS.systemFontPath (UI glyph fallback; default Pretendard)
+  enum class Target { Reader, System };
+
+  explicit FontSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, Target target = Target::Reader)
+      : ActivityWithSubactivity("FontSelection", renderer, mappedInput), target_(target) {}
 
   void onEnter() override;
   void onExit() override;
   void loop() override;
-  void render(RenderLock&&) override;
 
  private:
+  TaskHandle_t displayTaskHandle = nullptr;
+  SemaphoreHandle_t displayMutex = nullptr;
+  bool updateRequired = false;
+
+  Target target_ = Target::Reader;
+  int selectedIndex = 0;
+  std::vector<std::string> fontFiles;  // List of font file paths
+  std::vector<std::string> fontNames;  // Display names (without path and extension)
+
+  bool isSystemTarget() const { return target_ == Target::System; }
+
+  static void taskTrampoline(void* param);
+  [[noreturn]] void displayTaskLoop();
+  void render();
+  void loadFontList();
   void handleSelection();
 
-  struct FontEntry {
-    std::string name;
-    bool isBuiltin;
-    uint8_t settingIndex;  // index used by valueSetter
-  };
+  static constexpr const char* FONTS_DIR = "/.crosspoint/fonts";
+  static constexpr const char* ROOT_FONTS_DIR = "/fonts";
+  static constexpr const char* HIDDEN_FONTS_DIR = "/.fonts";  // upstream hidden font root
 
-  const SdCardFontRegistry* registry_;
-  ButtonNavigator buttonNavigator_;
-  std::vector<FontEntry> fonts_;
-  int selectedIndex_ = 0;
+  // Scans dirPath for .epdfont files; when recurseIntoSubdirs is true, also descends one level
+  // into per-family subfolders (layout /fonts/<Family>/<Family>_<size>.epdfont).
+  void scanFontsInDirectory(const char* dirPath, bool recurseIntoSubdirs = true);
 };

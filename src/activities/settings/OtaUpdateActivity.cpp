@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "MappedInputManager.h"
+#include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -35,7 +36,7 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
-  if (!updater.isUpdateNewer()) {
+  if (!updater.isUpdateNewerKO()) {
     LOG_DBG("OTA", "No new update available");
     {
       RenderLock lock(*this);
@@ -66,11 +67,15 @@ void OtaUpdateActivity::onEnter() {
 void OtaUpdateActivity::onExit() {
   Activity::onExit();
 
-  // Turn off wifi
-  WiFi.disconnect(false);  // false = don't erase credentials, send disconnect frame
-  delay(100);              // Allow disconnect frame to be sent
-  WiFi.mode(WIFI_OFF);
-  delay(100);  // Allow WiFi hardware to fully power down
+  // Success path reboots via the SHUTTING_DOWN state's plain ESP.restart()
+  // (loop() above) so the new firmware boots normally. Back-out paths land
+  // here with wifi still active; silent-restart to free the LWIP/mbedTLS
+  // fragmentation, same as the other wifi activities.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    WiFi.disconnect(false);
+    delay(30);
+    silentRestart();
+  }
 }
 
 void OtaUpdateActivity::render(RenderLock&&) {
@@ -107,7 +112,8 @@ void OtaUpdateActivity::render(RenderLock&&) {
     const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_UPDATE), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == UPDATE_IN_PROGRESS) {
-    renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATING));
+    const auto* label = updater.getPhase() == OtaUpdater::Phase::Downloading ? tr(STR_DOWNLOADING) : tr(STR_UPDATING);
+    renderer.drawCenteredText(UI_10_FONT_ID, top, label);
 
     int y = top + height + metrics.verticalSpacing;
     GUI.drawProgressBar(
@@ -128,11 +134,20 @@ void OtaUpdateActivity::render(RenderLock&&) {
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_FAILED), true, EpdFontFamily::BOLD);
+    const auto& err = updater.getLastError();
+    if (!err.empty()) {
+      renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing, err.c_str());
+    }
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FINISHED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_COMPLETE), true, EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing, tr(STR_POWER_ON_HINT));
+    int hintY = top + height + metrics.verticalSpacing;
+    renderer.drawCenteredText(UI_10_FONT_ID, hintY, tr(STR_RESTARTING_HINT));
+    hintY += height;
+    renderer.drawCenteredText(UI_10_FONT_ID, hintY, tr(STR_RESTARTING_HINT_LINE2));
+    hintY += height;
+    renderer.drawCenteredText(UI_10_FONT_ID, hintY, tr(STR_RESTARTING_HINT_LINE3));
   }
 
   renderer.displayBuffer();
