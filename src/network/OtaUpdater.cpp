@@ -18,8 +18,7 @@
 
 namespace {
 // Korean AI fork release URL. Tags must use plain semver-ko form, e.g. 1.4.0-ko.0.
-constexpr char latestReleaseUrl[] =
-    "https://api.github.com/repos/YMO1215/crosspoint-reader-ko-ai/releases/latest";
+constexpr char latestReleaseUrl[] = "https://api.github.com/repos/YMO1215/crosspoint-reader-ko-ai/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
@@ -339,4 +338,3 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   LOG_INF("OTA", "Update completed");
   return OK;
 }
-
