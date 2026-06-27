@@ -35,8 +35,8 @@
 예:
 
 ```bash
-git tag 1.4.0-ko.0
-git push origin 1.4.0-ko.0
+git tag <ko-tag>
+git push origin <ko-tag>
 ```
 
 버전 번호 규칙:
@@ -64,14 +64,14 @@ git merge ko/release/korean
 3. upstream 안정 태그를 반영한다.
 
 ```bash
-git merge 1.4.0
+git merge <upstream-tag>
 ```
 
 4. 충돌 해결 원칙을 적용한다.
 
 - `.epdfont` 관련 충돌은 한국어 포크 쪽을 우선한다.
 - `.cpfont`, `SdCardFont*`, `FontInstaller`, `FontsPage.html`은 한국어 릴리스에서는 기본적으로 제외한다.
-- 1.4.0의 EPUB, RTL, 북마크, 이미지, 키보드, KOReader Sync 개선은 가능한 한 유지한다.
+- upstream 태그의 EPUB, RTL, 북마크, 이미지, 키보드, KOReader Sync, 설정/UI 개선은 가능한 한 유지한다.
 - 다국어 YAML은 릴리스 크기 예산 때문에 `english.yaml`, `korean.yaml`만 유지한다.
 
 5. 문서와 릴리스 노트를 작성한다.
@@ -90,7 +90,7 @@ pio run -e gh_release
 
 ```bash
 git push origin HEAD
-git push origin 1.4.0-ko.0
+git push origin <ko-tag>
 ```
 
 태그 push 후 `.github/workflows/release.yml`이 GitHub Release를 만들고 다음 파일을 첨부한다.
