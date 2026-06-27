@@ -44,6 +44,7 @@ git push origin <ko-tag>
 - `1.4.0-ko.0`: upstream `1.4.0` 기반 첫 한국어 AI 릴리스
 - `1.4.0-ko.1`: 같은 upstream 기반 후속 수정
 - `1.4.1-ko.0`: upstream `1.4.1` 기반 첫 한국어 AI 릴리스
+- `1.4.1-ko.1`: 같은 upstream 기반 한국어 보기/간격 후속 수정
 
 ## 업데이트 절차
 

@@ -136,7 +136,7 @@ See [SD card fonts](./docs/sd-card-fonts.md) for details.
 
 - [User Guide](./USER_GUIDE.md)
 - [Korean AI update management](./docs/update-management.md)
-- [Release notes](./docs/release-notes/1.4.1-ko.0.md)
+- [Release notes](./docs/release-notes/1.4.1-ko.1.md)
 - [Web server usage](./docs/webserver.md)
 - [Web server endpoints](./docs/webserver-endpoints.md)
 - [Project scope](./SCOPE.md)

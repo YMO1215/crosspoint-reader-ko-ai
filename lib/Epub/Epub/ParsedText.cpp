@@ -289,40 +289,49 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
     wordIsFocusSuffix.push_back(isFocusSuffix);
   };
 
+  const bool useKoreanCharacterWrap = characterWrap && blockStyle.alignment == CssTextAlign::Justify;
   bool effectiveAttachToPrevious = attachToPrevious;
   bool effectiveNoSpaceBefore = false;
-  if (attachToPrevious && !words.empty() &&
-      hasCjkBreakOpportunityBetween(lastCodepoint(words.back()), firstCodepoint(word))) {
-    effectiveAttachToPrevious = false;
-    effectiveNoSpaceBefore = true;
-  }
 
-  if (auto breakOffsets = cjkCharacterBreakByteOffsets(word); !breakOffsets.empty()) {
-    bool firstToken = true;
-    size_t tokenStart = 0;
-    for (const size_t breakOffset : breakOffsets) {
-      if (breakOffset <= tokenStart || breakOffset > word.size()) continue;
-      pushToken(word.substr(tokenStart, breakOffset - tokenStart), firstToken ? effectiveAttachToPrevious : false,
-                firstToken ? effectiveNoSpaceBefore : true, false);
-      firstToken = false;
-      tokenStart = breakOffset;
+  // The Korean fork's stable layout keeps full Korean words intact until
+  // layoutCharacterWrap(), then splits only the portion needed to control line
+  // fill and inter-word spacing. Upstream 1.4.x pre-splits CJK text here; if we
+  // do that while characterWrap is enabled, the Korean layout path treats every
+  // character as a separate word and the page gains excessive letter spacing.
+  if (!useKoreanCharacterWrap) {
+    if (attachToPrevious && !words.empty() &&
+        hasCjkBreakOpportunityBetween(lastCodepoint(words.back()), firstCodepoint(word))) {
+      effectiveAttachToPrevious = false;
+      effectiveNoSpaceBefore = true;
     }
-    if (tokenStart < word.size()) {
-      pushToken(word.substr(tokenStart), firstToken ? effectiveAttachToPrevious : false,
-                firstToken ? effectiveNoSpaceBefore : true, false);
-    }
-    if (wordStartsRtl) {
-      hasRtlWord = true;
-    }
-    return;
-  }
 
-  if (containsCjkBreakableCodepoint(word)) {
-    pushToken(std::move(word), effectiveAttachToPrevious, effectiveNoSpaceBefore, false);
-    if (wordStartsRtl) {
-      hasRtlWord = true;
+    if (auto breakOffsets = cjkCharacterBreakByteOffsets(word); !breakOffsets.empty()) {
+      bool firstToken = true;
+      size_t tokenStart = 0;
+      for (const size_t breakOffset : breakOffsets) {
+        if (breakOffset <= tokenStart || breakOffset > word.size()) continue;
+        pushToken(word.substr(tokenStart, breakOffset - tokenStart), firstToken ? effectiveAttachToPrevious : false,
+                  firstToken ? effectiveNoSpaceBefore : true, false);
+        firstToken = false;
+        tokenStart = breakOffset;
+      }
+      if (tokenStart < word.size()) {
+        pushToken(word.substr(tokenStart), firstToken ? effectiveAttachToPrevious : false,
+                  firstToken ? effectiveNoSpaceBefore : true, false);
+      }
+      if (wordStartsRtl) {
+        hasRtlWord = true;
+      }
+      return;
     }
-    return;
+
+    if (containsCjkBreakableCodepoint(word)) {
+      pushToken(std::move(word), effectiveAttachToPrevious, effectiveNoSpaceBefore, false);
+      if (wordStartsRtl) {
+        hasRtlWord = true;
+      }
+      return;
+    }
   }
 
   // Already-bold text should stay fully bold; focus splitting would make its suffix regular later.
@@ -507,6 +516,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
           words.erase(words.begin());
           wordStyles.erase(wordStyles.begin());
           wordContinues.erase(wordContinues.begin());
+          wordNoSpaceBefore.erase(wordNoSpaceBefore.begin());
           wordIsFocusSuffix.erase(wordIsFocusSuffix.begin());
         } else {
           auto chars = splitUtf8Chars(word);
@@ -537,6 +547,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
             words.erase(words.begin());
             wordStyles.erase(wordStyles.begin());
             wordContinues.erase(wordContinues.begin());
+            wordNoSpaceBefore.erase(wordNoSpaceBefore.begin());
             wordIsFocusSuffix.erase(wordIsFocusSuffix.begin());
           }
         }
@@ -548,6 +559,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
         words.erase(words.begin());
         wordStyles.erase(wordStyles.begin());
         wordContinues.erase(wordContinues.begin());
+        wordNoSpaceBefore.erase(wordNoSpaceBefore.begin());
         wordIsFocusSuffix.erase(wordIsFocusSuffix.begin());
 
         if (newSpacing <= maxSpacing) {
@@ -584,6 +596,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
               words.erase(words.begin());
               wordStyles.erase(wordStyles.begin());
               wordContinues.erase(wordContinues.begin());
+              wordNoSpaceBefore.erase(wordNoSpaceBefore.begin());
               wordIsFocusSuffix.erase(wordIsFocusSuffix.begin());
             }
           }
@@ -633,6 +646,7 @@ void ParsedText::layoutCharacterWrap(const GfxRenderer& renderer, const int font
         words.erase(words.begin());
         wordStyles.erase(wordStyles.begin());
         wordContinues.erase(wordContinues.begin());
+        wordNoSpaceBefore.erase(wordNoSpaceBefore.begin());
         wordIsFocusSuffix.erase(wordIsFocusSuffix.begin());
       }
     }

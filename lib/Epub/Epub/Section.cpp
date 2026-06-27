@@ -10,9 +10,11 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-// Version 26: Korean (paragraphIndent, characterWrap) + upstream 1.3.0 (focusReadingEnabled,
-//             PageLutEntry with paragraphIndex/listItemIndex, paragraph/li LUTs).
-constexpr uint8_t SECTION_FILE_VERSION = 26;
+// Version 28: restore Korean characterWrap tokenization on top of upstream 1.4.x CJK handling.
+// Bump invalidates 1.4.1-ko.0 section caches whose pre-split CJK tokens changed Korean spacing.
+// Version 26 base: Korean (paragraphIndent, characterWrap) + upstream 1.3.0 (focusReadingEnabled,
+// PageLutEntry with paragraphIndex/listItemIndex, paragraph/li LUTs).
+constexpr uint8_t SECTION_FILE_VERSION = 28;
 // Fields: version(1) + fontId(4) + lineCompression(4) + extraParagraphSpacing(1) +
 //         paragraphIndent(1) + paragraphAlignment(1) + characterWrap(1) +
 //         viewportWidth(2) + viewportHeight(2) + hyphenationEnabled(1) + embeddedStyle(1) +
