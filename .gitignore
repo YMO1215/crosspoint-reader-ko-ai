@@ -31,3 +31,8 @@ lib/EpdFont/scripts/output/
 /dependencies.lock
 /sdkconfig.*
 sdkconfig.sticky
+
+# 한국어 SD 글꼴 산출물 — fontconvert_sdcard.py 로 생성한다(21MB+).
+# 저장소에 넣지 않고 릴리스 asset 으로 배포한다. 원본 TTF 는
+# lib/EpdFont/builtinFonts/source/{Pretendard,KoPub-Batang}/ 에 있다.
+ko-fonts/
