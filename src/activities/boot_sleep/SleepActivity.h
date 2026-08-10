@@ -10,9 +10,9 @@ class SleepActivity final : public Activity {
   void onEnter() override;
 
  private:
-  // Flash the panel white with a full waveform so the screen the user slept
-  // from does not ghost through the sleep image. See the definition.
-  void flashPanelClean() const;
+  // FULL (one GC pass, clears the ghost, one blink) or HALF (upstream, DU on
+  // X4, ghosts) per the sleep ghost-clear setting. See the definition.
+  static HalDisplay::RefreshMode sleepRefreshMode();
   void renderDefaultSleepScreen() const;
   void renderCustomSleepScreen() const;
   void renderCoverSleepScreen() const;

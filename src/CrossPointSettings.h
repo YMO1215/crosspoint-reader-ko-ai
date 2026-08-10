@@ -258,6 +258,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t embeddedStyle = 1;
   // Focus Reading - emphasizes the first part of words with bold
   uint8_t focusReadingEnabled = 0;
+  // Clear the previous screen before painting the sleep screen (0 = off, 1 = on).
+  // On X4 the stock HALF pass is a DU partial, so the menu slept from shows
+  // through; FULL costs one blink at sleep. See SleepActivity::sleepRefreshMode.
+  uint8_t sleepScreenGhostClear = 1;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
   // SD card font family that draws CJK in the *menus*, independent of the book

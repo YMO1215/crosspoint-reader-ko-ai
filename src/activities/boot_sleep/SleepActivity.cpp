@@ -155,23 +155,24 @@ void SleepActivity::renderCustomSleepScreen() const {
 // sequence, used once for the sleep image. It never runs the multi-flash GC
 // waveform (0xF7) that FULL_REFRESH selects (#2471's blinking complaint).
 //
-// ⚠️ That single pass cannot clear what was on screen before it. Menus redraw
-// with FAST by default, so the settings page the user slept from stays visible
-// as a ghost under the sleep image — and unlike a page turn, this one sits
-// there for hours. Flash the panel white once first, then paint as before.
-// The blink lands only at sleep, never during reading, which is what #2471 was
-// actually about. Not used by renderLastScreenSleepScreen, which keeps the
-// previous screen on purpose.
-void SleepActivity::flashPanelClean() const {
-  renderer.clearScreen();
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+// ⚠️ On X4, HALF is not a clean pass at all: Uc8279X4Driver picks the DU
+// partial waveform for every mode except Full, so the menu the user slept from
+// stays visible under the sleep image. Only Full seeds the OLD plane white and
+// runs GC. Unlike a page turn this screen sits there for hours, so the flash
+// is worth it — and it is ONE pass, not a white flash followed by a DU paint,
+// which blinks twice and still ends on the ghosting waveform.
+//
+// #2471's complaint was about blinking while reading; nothing here touches
+// that path. Settings → sleep ghost clear turns it off for anyone who would
+// rather keep the ghost than the blink.
+HalDisplay::RefreshMode SleepActivity::sleepRefreshMode() {
+  return SETTINGS.sleepScreenGhostClear ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH;
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
-  flashPanelClean();
   renderer.clearScreen();
   renderer.drawImage(Logo120, (pageWidth - 120) / 2, (pageHeight - 120) / 2, 120, 120);
   renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, tr(STR_CROSSPOINT), true, EpdFontFamily::BOLD);
@@ -182,7 +183,7 @@ void SleepActivity::renderDefaultSleepScreen() const {
     renderer.invertScreen();
   }
 
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.displayBuffer(sleepRefreshMode());
 }
 
 void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
@@ -226,7 +227,6 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
   }
 
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
-  flashPanelClean();
   renderer.clearScreen();
 
   const bool hasGreyscale = bitmap.hasGreyscale() &&
@@ -239,13 +239,16 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
   }
 
   if (hasGreyscale) {
-    // OEM grayscale pipeline base. Must stay HALF: the gray nudge LUT is
-    // calibrated against the pixel state the single-pass HALF waveform leaves
-    // behind. A FULL (GC) base parks pixels in a different charge state and
-    // the differential nudge then lands unevenly (blotchy noise in gray areas).
+    // ⚠️ The grayscale base stays HALF even with ghost-clear on. Upstream's
+    // note: the gray nudge LUT is calibrated against the pixel state the
+    // single-pass HALF waveform leaves behind, and a GC base parks pixels in a
+    // different charge state, so the differential nudge lands unevenly
+    // (blotchy gray areas). A greyscale sleep image therefore still ghosts a
+    // little — trading a visible artefact in the picture itself for it is a bad
+    // deal. Use a plain 1-bit BMP for a fully clean sleep screen.
     renderer.displayGrayscaleBase(HalDisplay::HALF_REFRESH);
   } else {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    renderer.displayBuffer(sleepRefreshMode());
   }
 
   if (hasGreyscale) {
@@ -358,7 +361,8 @@ void SleepActivity::renderLastScreenSleepScreen() const {
 }
 
 void SleepActivity::renderBlankSleepScreen() const {
-  // Blank must actually be blank: a HALF pass alone leaves the last menu showing.
+  // Blank must actually be blank: on X4 a HALF pass is DU, which leaves the
+  // last menu showing through.
   renderer.clearScreen();
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  renderer.displayBuffer(sleepRefreshMode());
 }
