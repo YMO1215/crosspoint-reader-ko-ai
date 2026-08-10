@@ -36,3 +36,4 @@ sdkconfig.sticky
 # 저장소에 넣지 않고 릴리스 asset 으로 배포한다. 원본 TTF 는
 # lib/EpdFont/builtinFonts/source/{Pretendard,KoPub-Batang}/ 에 있다.
 ko-fonts/
+dist/
