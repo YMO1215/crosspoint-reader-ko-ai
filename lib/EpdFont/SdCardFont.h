@@ -1,5 +1,7 @@
 #pragma once
 
+#include <HalStorage.h>
+
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -244,7 +246,17 @@ class SdCardFont {
   OverflowContext overflowCtx_[MAX_STYLES] = {};
 
   // Shared on-demand overflow buffer (ring buffer of glyphs loaded via glyphMissHandler)
-  static constexpr uint32_t OVERFLOW_CAPACITY = 8;
+  //
+  // ⚠️ Sized for a **fully Korean UI**, not upstream's occasional CJK title.
+  // Menus never open a PrewarmScope, so every hangul syllable they draw comes
+  // through onGlyphMiss. At upstream's 8 slots a single menu row already
+  // evicts the row above it, so each redraw — every button press — re-reads
+  // the whole screen from the card. 64 slots hold a screen's distinct glyphs,
+  // making repeat draws pure RAM hits. Bounded cost: 64 entries plus their
+  // bitmaps is ~7KB at 8pt and ~13KB at 18pt per loaded size, and clearCache()
+  // (the reader's per-render PrewarmScope) still frees the lot before the
+  // reader needs the heap.
+  static constexpr uint32_t OVERFLOW_CAPACITY = 64;
   struct OverflowEntry {
     EpdGlyph glyph;
     uint8_t* bitmap = nullptr;
@@ -254,6 +266,13 @@ class SdCardFont {
   OverflowEntry overflow_[OVERFLOW_CAPACITY] = {};
   uint32_t overflowCount_ = 0;
   uint32_t overflowNext_ = 0;
+
+  // Handle kept open across a burst of misses. Opening a .cpfont costs a FAT
+  // directory walk plus the storage mutex; doing that per *character* was the
+  // bulk of the cost of drawing a Korean menu. Closed by clearOverflow(), and
+  // on any I/O error so a card that went away self-heals on the next glyph.
+  HalFile overflowFile_;
+  bool ensureOverflowFile();
 
   // Compact advance-only table for layout measurement (per-style).
   // Built by buildAdvanceTable(), queried by getAdvance().

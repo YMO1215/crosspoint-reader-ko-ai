@@ -196,6 +196,13 @@ void SdCardFont::freeAll() {
   loaded_ = false;
 }
 
+bool SdCardFont::ensureOverflowFile() {
+  // Reuse the handle across a burst of misses; onGlyphMiss closes it on any
+  // I/O error, so a card pulled mid-session simply reopens (or fails) here.
+  if (overflowFile_.isOpen()) return true;
+  return Storage.openFileForRead("SDCF", filePath_, overflowFile_);
+}
+
 void SdCardFont::clearOverflow() {
   for (uint32_t i = 0; i < overflowCount_; i++) {
     delete[] overflow_[i].bitmap;
@@ -204,6 +211,9 @@ void SdCardFont::clearOverflow() {
   }
   overflowCount_ = 0;
   overflowNext_ = 0;
+  // Don't hold a descriptor open past the cache it served — the reader's
+  // per-render clearCache() lands here, and font install/delete remounts.
+  if (overflowFile_.isOpen()) overflowFile_.close();
 }
 
 // --- Per-style kern/ligature ---
@@ -1443,12 +1453,14 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
   uint32_t slot = self->overflowNext_;
   bool wasAtCapacity = (self->overflowCount_ == OVERFLOW_CAPACITY);
 
-  // Read glyph metadata into temporary
-  HalFile file;
-  if (!Storage.openFileForRead("SDCF", self->filePath_, file)) {
+  // Read glyph metadata into temporary. The handle stays open between misses —
+  // a Korean menu lands here once per syllable, and re-opening the .cpfont each
+  // time cost a FAT directory walk plus the storage mutex per character.
+  if (!self->ensureOverflowFile()) {
     LOG_ERR("SDCF", "Overflow: failed to open .cpfont");
     return nullptr;
   }
+  HalFile& file = self->overflowFile_;
 
   EpdGlyph tempGlyph = {};
   uint32_t glyphFileOff = s.glyphsFileOffset + static_cast<uint32_t>(globalIdx) * sizeof(EpdGlyph);
@@ -1459,6 +1471,7 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
   }
   if (file.read(reinterpret_cast<uint8_t*>(&tempGlyph), sizeof(EpdGlyph)) != sizeof(EpdGlyph)) {
     LOG_ERR("SDCF", "Overflow: failed to read glyph metadata for U+%04X style %u", codepoint, styleIdx);
+    file.close();
     return nullptr;
   }
 
@@ -1479,6 +1492,7 @@ const EpdGlyph* SdCardFont::onGlyphMiss(void* ctx, uint32_t codepoint) {
     if (file.read(tempBitmap, tempGlyph.dataLength) != static_cast<int>(tempGlyph.dataLength)) {
       LOG_ERR("SDCF", "Overflow: failed to read bitmap for U+%04X", codepoint);
       delete[] tempBitmap;
+      file.close();
       return nullptr;
     }
   }
