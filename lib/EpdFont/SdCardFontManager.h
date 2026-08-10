@@ -48,6 +48,11 @@ class SdCardFontManager {
     SdCardFont* font;  // heap-allocated, owned
     int fontId;
     uint8_t size;
+    // ⚠️ The menu font is chosen independently of the reader font, so two
+    // families can be resident at once and the reuse check in
+    // loadFamilyExtraSize must match on family too — matching size alone
+    // would silently hand the UI the reader's family at that size.
+    std::string family;
   };
   static int computeFontId(uint32_t contentHash, const char* familyName, uint8_t pointSize);
 

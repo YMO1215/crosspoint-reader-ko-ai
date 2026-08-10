@@ -52,7 +52,6 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
     if (family) {
       if (manager_.loadFamily(*family, renderer, SETTINGS.fontPointSize)) {
         snapFontPointSizeTo(manager_.currentPointSize());
-        setupUiFallbacks(renderer);
         LOG_DBG("SDFS", "Loaded SD card font family: %s", SETTINGS.sdFontFamilyName);
       } else {
         LOG_ERR("SDFS", "Failed to load SD font family: %s (clearing)", SETTINGS.sdFontFamilyName);
@@ -63,6 +62,11 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
       SETTINGS.clearSdFontFamily();
     }
   }
+
+  // Unconditional: with a separate menu font the UI needs hangul even when the
+  // book font is a built-in (or failed to load). Runs after loadFamily so the
+  // follow-the-book-font default sees the family that was actually loaded.
+  setupUiFallbacks(renderer);
 
   LOG_DBG("SDFS", "SD font system ready (%d families discovered)", registry_.getFamilyCount());
 }
@@ -81,9 +85,21 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   const char* wantedFamily = SETTINGS.sdFontFamilyName;
   const std::string& currentFamily = manager_.currentFamilyName();
 
+  // The menu font can change while the book font stays put. Its UI sizes are
+  // already resident, so re-running setupUiFallbacks alone would stack a second
+  // family on top of the old one; take the full unload+reload path instead.
+  const bool uiFamilyChanged = (appliedUiFamily_ != SETTINGS.sdUiFontFamilyName);
+  if (uiFamilyChanged) {
+    LOG_DBG("SDFS", "Menu font changed: '%s' -> '%s'", appliedUiFamily_.c_str(), SETTINGS.sdUiFontFamilyName);
+  }
+
   if (wantedFamily[0] == '\0') {
-    if (!currentFamily.empty()) {
+    if (!currentFamily.empty() || uiFamilyChanged) {
       manager_.unloadAll(renderer);
+      // A built-in book font still leaves the menus needing hangul, so the menu
+      // family is reloaded on its own — unloadAll just dropped it along with
+      // the reader font.
+      setupUiFallbacks(renderer);
     }
     // Back on a built-in family, which exists only at BUILTIN_READER_POINT_SIZES:
     // a size inherited from an SD family has to come back into that set.
@@ -109,7 +125,7 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     // Snap before the early return: the wanted size can already be loaded while
     // the setting still names a size this family does not ship.
     snapFontPointSizeTo(wantedPt);
-    if (!registryWasDirty && wantedPt == manager_.currentPointSize()) return;
+    if (!registryWasDirty && !uiFamilyChanged && wantedPt == manager_.currentPointSize()) return;
     LOG_DBG("SDFS", "Reloading %s: size %u -> %u%s", wantedFamily, manager_.currentPointSize(), wantedPt,
             registryWasDirty ? " [registry dirty]" : "");
   }
@@ -135,38 +151,55 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
 }
 
 void SdCardFontSystem::setupUiFallbacks(GfxRenderer& renderer) {
-  const std::string& familyName = manager_.currentFamilyName();
+  // The menus may be set in a different family from the book: on a Korean UI
+  // the built-in fonts draw no hangul at all, so this family *is* the menu
+  // typeface, and a gothic reads better there than the serif one might want
+  // for the book. Empty means follow the book font — upstream's behaviour.
+  const std::string& readerFamilyName = manager_.currentFamilyName();
+  const std::string familyName =
+      SETTINGS.sdUiFontFamilyName[0] != '\0' ? SETTINGS.sdUiFontFamilyName : readerFamilyName;
+  // Record what we acted on even when we bail: ensureLoaded compares against
+  // this to spot a menu-font change, and a family that failed to load must not
+  // re-trigger a full reload on every frame.
+  appliedUiFamily_ = SETTINGS.sdUiFontFamilyName;
   if (familyName.empty()) return;  // no SD family loaded — nothing to fall back to
 
   const auto* family = registry_.findFamily(familyName);
-  if (!family) return;
-
-  // Probe the already-loaded reader-size font before paying for the UI sizes:
-  // resolveTextFontId only redirects on CJK codepoints, so a Latin-only family
-  // can never act as a fallback and its UI sizes would be dead weight in RAM.
-  const auto readerIt = renderer.getFontMap().find(manager_.getFontId(familyName));
-  if (readerIt == renderer.getFontMap().end()) return;
-  // One representative codepoint per script: Han, Hiragana, Katakana, Hangul.
-  static constexpr uint32_t kCjkProbes[] = {0x4E00, 0x3042, 0x30A2, 0xAC00};
-  bool hasCjk = false;
-  for (const uint32_t cp : kCjkProbes) {
-    if (readerIt->second.hasCodepoint(cp)) {
-      hasCjk = true;
-      break;
-    }
-  }
-  if (!hasCjk) {
-    LOG_DBG("SDFS", "%s has no CJK coverage - skipping UI fallback sizes", familyName.c_str());
+  if (!family) {
+    LOG_DBG("SDFS", "UI font family not on card: %s", familyName.c_str());
     return;
   }
 
+  // One representative codepoint per script: Han, Hiragana, Katakana, Hangul.
+  static constexpr uint32_t kCjkProbes[] = {0x4E00, 0x3042, 0x30A2, 0xAC00};
+
+  // Probe the first UI size that loads before paying for the rest:
+  // resolveTextFontId only redirects on CJK codepoints, so a Latin-only family
+  // can never act as a fallback and its UI sizes would be dead weight in RAM.
+  bool probed = false;
   for (const auto& ui : kUiFontSizes) {
     const int sdFontId = manager_.loadFamilyExtraSize(*family, renderer, ui.pointSize);
-    if (sdFontId != 0) {
-      renderer.setFallbackFont(ui.fontId, sdFontId);
-    } else {
+    if (sdFontId == 0) {
       LOG_DBG("SDFS", "No %u pt SD glyphs for UI fallback in %s", ui.pointSize, familyName.c_str());
+      continue;
     }
+    if (!probed) {
+      const auto it = renderer.getFontMap().find(sdFontId);
+      if (it == renderer.getFontMap().end()) continue;
+      bool hasCjk = false;
+      for (const uint32_t cp : kCjkProbes) {
+        if (it->second.hasCodepoint(cp)) {
+          hasCjk = true;
+          break;
+        }
+      }
+      if (!hasCjk) {
+        LOG_DBG("SDFS", "%s has no CJK coverage - skipping UI fallback sizes", familyName.c_str());
+        return;
+      }
+      probed = true;
+    }
+    renderer.setFallbackFont(ui.fontId, sdFontId);
   }
 }
 

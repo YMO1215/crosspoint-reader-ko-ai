@@ -56,6 +56,10 @@ class SdCardFontSystem {
   SdCardFontRegistry registry_;
   SdCardFontManager manager_;
   std::atomic<bool> registryDirty_{false};
+  // Value of SETTINGS.sdUiFontFamilyName the last time setupUiFallbacks ran.
+  // ensureLoaded compares against it to notice a menu-font change that leaves
+  // the book font untouched — which would otherwise take effect only on reboot.
+  std::string appliedUiFamily_;
 };
 
 // Global SD card font system instance (defined in main.cpp).

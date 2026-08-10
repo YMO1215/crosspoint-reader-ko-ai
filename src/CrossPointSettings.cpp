@@ -95,6 +95,10 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (sdFontFamilyName[0] != '\0') {
     doc["sdFontFamilyName"] = sdFontFamilyName;
   }
+  // Menu CJK font family — same, save manually
+  if (sdUiFontFamilyName[0] != '\0') {
+    doc["sdUiFontFamilyName"] = sdUiFontFamilyName;
+  }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
@@ -205,6 +209,9 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   const char* sfn = doc["sdFontFamilyName"] | "";
   strncpy(sdFontFamilyName, sfn, sizeof(sdFontFamilyName) - 1);
   sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
+  const char* sufn = doc["sdUiFontFamilyName"] | "";
+  strncpy(sdUiFontFamilyName, sufn, sizeof(sdUiFontFamilyName) - 1);
+  sdUiFontFamilyName[sizeof(sdUiFontFamilyName) - 1] = '\0';
   if (storedFontFamily == LEGACY_OPENDYSLEXIC && sdFontFamilyName[0] == '\0') {
     fontFamily = NOTOSERIF;
     strncpy(sdFontFamilyName, "OpenDyslexic", sizeof(sdFontFamilyName) - 1);

@@ -137,6 +137,51 @@ inline SettingInfo buildFontSizeSetting(const SdCardFontRegistry* registry) {
   return s;
 }
 
+// Which SD family draws CJK in the menus. Built-in UI fonts are Latin-only, so
+// on a Korean UI this setting picks the typeface the menus are actually set in.
+// Option 0 follows the book font (upstream's behaviour); the rest are SD
+// families, letting the book be a serif while the menus stay gothic. Persists
+// in SETTINGS.sdUiFontFamilyName (saved manually in toJson/fromJson — the
+// generic loop skips dynamic entries).
+inline SettingInfo buildMenuFontSetting(const SdCardFontRegistry* registry) {
+  std::vector<std::string> sdFamilyNames;
+  if (registry) {
+    const auto& families = registry->getFamilies();
+    sdFamilyNames.reserve(families.size());
+    std::transform(families.begin(), families.end(), std::back_inserter(sdFamilyNames),
+                   [](const SdCardFontFamilyInfo& f) { return f.name; });
+  }
+
+  SettingInfo s;
+  s.nameId = StrId::STR_MENU_FONT;
+  s.type = SettingType::ENUM;
+  s.enumStringValues.reserve(sdFamilyNames.size() + 1);
+  s.enumStringValues.push_back(I18N.get(StrId::STR_SAME_AS_BOOK));
+  s.enumStringValues.insert(s.enumStringValues.end(), sdFamilyNames.begin(), sdFamilyNames.end());
+  s.key = "sdUiFontFamilyName";
+  s.category = StrId::STR_CAT_READER;
+
+  s.valueGetter = [sdFamilyNames]() -> uint8_t {
+    for (int i = 0; i < static_cast<int>(sdFamilyNames.size()); i++) {
+      if (sdFamilyNames[i] == SETTINGS.sdUiFontFamilyName) {
+        return static_cast<uint8_t>(i + 1);
+      }
+    }
+    return 0;  // follow the book font, also when the stored family is gone
+  };
+
+  s.valueSetter = [sdFamilyNames](uint8_t v) {
+    if (v == 0 || v > sdFamilyNames.size()) {
+      SETTINGS.sdUiFontFamilyName[0] = '\0';
+      return;
+    }
+    strncpy(SETTINGS.sdUiFontFamilyName, sdFamilyNames[v - 1].c_str(), sizeof(SETTINGS.sdUiFontFamilyName) - 1);
+    SETTINGS.sdUiFontFamilyName[sizeof(SETTINGS.sdUiFontFamilyName) - 1] = '\0';
+  };
+
+  return s;
+}
+
 // Build the dictionary selection setting dynamically from the folders discovered
 // under /dictionaries. "None" plus one option per dictionary; the selected folder
 // name persists in SETTINGS.dictionaryName (saved/loaded manually in
@@ -436,6 +481,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     auto it = std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_FONT_FAMILY; });
     if (it != v.end()) {
       *it = buildFontFamilySetting(registry);
+      // Sits directly under the book font — the two are read together.
+      v.insert(it + 1, buildMenuFontSetting(registry));
     }
   }
   {
