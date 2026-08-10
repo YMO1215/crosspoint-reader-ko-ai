@@ -154,10 +154,24 @@ void SleepActivity::renderCustomSleepScreen() const {
 // firmware's only clean refresh in normal operation is the single-pass 0xD7
 // sequence, used once for the sleep image. It never runs the multi-flash GC
 // waveform (0xF7) that FULL_REFRESH selects (#2471's blinking complaint).
+//
+// ⚠️ That single pass cannot clear what was on screen before it. Menus redraw
+// with FAST by default, so the settings page the user slept from stays visible
+// as a ghost under the sleep image — and unlike a page turn, this one sits
+// there for hours. Flash the panel white once first, then paint as before.
+// The blink lands only at sleep, never during reading, which is what #2471 was
+// actually about. Not used by renderLastScreenSleepScreen, which keeps the
+// previous screen on purpose.
+void SleepActivity::flashPanelClean() const {
+  renderer.clearScreen();
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+}
+
 void SleepActivity::renderDefaultSleepScreen() const {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
+  flashPanelClean();
   renderer.clearScreen();
   renderer.drawImage(Logo120, (pageWidth - 120) / 2, (pageHeight - 120) / 2, 120, 120);
   renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, tr(STR_CROSSPOINT), true, EpdFontFamily::BOLD);
@@ -212,6 +226,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
   }
 
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
+  flashPanelClean();
   renderer.clearScreen();
 
   const bool hasGreyscale = bitmap.hasGreyscale() &&
@@ -343,6 +358,7 @@ void SleepActivity::renderLastScreenSleepScreen() const {
 }
 
 void SleepActivity::renderBlankSleepScreen() const {
+  // Blank must actually be blank: a HALF pass alone leaves the last menu showing.
   renderer.clearScreen();
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
 }
